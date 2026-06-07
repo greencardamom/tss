@@ -157,12 +157,12 @@ def ssh_stream(cmd):
 
 
 def list_project_dirs():
-    rc, out, err = ssh_run("ls -1d " + METAIMP + "/imp*")
+    # find (not a glob) avoids ARG_MAX + tcsh 'No match'; -printf gives basenames.
+    rc, out, err = ssh_run("find " + METAIMP +
+                           " -maxdepth 1 -type d -name 'imp*' -printf '%f\\n'")
     if rc != 0:
-        if not out.strip():       # "No match" / empty
-            return []
         raise RuntimeError("list dirs failed: " + err.strip()[:200])
-    return [ln.rstrip("/").rsplit("/", 1)[-1] for ln in out.splitlines() if ln.strip()]
+    return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
 
 def fetch_iabget_done(base):
@@ -210,7 +210,7 @@ def main():
     if args.backfill:
         buf, seen, total = [], set(), 0
         for line in ssh_stream("find " + METAIMP +
-                               " -name iabget.done -type f -exec cat {} +"):
+                               " -name iabget.done -type f -exec cat '{}' +"):
             events, proj, ok = parse_line(line)
             if not ok:
                 unknown.append(line.strip())
