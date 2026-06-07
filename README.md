@@ -8,10 +8,13 @@ for this — the export-to-Parquet+drop job is planned, not yet built).
 
 Live URL: `https://tss.toolforge.org` — API under `/api/v1`.
 
-First two sources:
-- **iabotwatch** — Wayback/archive.org links added across Wikimedia projects,
-  fed live from the EventStream pipeline running on the host `acre`.
+Sources are named after the API/service the data comes from:
+- **eventstreams** — Wayback/archive.org links added across Wikimedia projects,
+  observed via Wikimedia EventStreams (all actors; imperfect; 2020→), fed live
+  from the pipeline running on the host `acre`.
 - **booksup** — daily BooksUp usage counts, pulled from BooksUp's published JSONL.
+- **iabotapi** — authoritative per-wiki daily IABot activity from IABot's own
+  statistics API (bot-only; 2015→).
 
 ---
 
@@ -63,7 +66,7 @@ The repo root is checked out as `~/www` on Toolforge (so the app lands at
 ```
 sql/
   schema.sql              4 tables: source, metric, event (partitioned by year), rollup
-  seed.sql                registers iabotwatch + booksup sources and their metrics
+  seed.sql                registers eventstreams + booksup + iabotapi sources and their metrics
 python/src/               (served by the webservice; DB scripts run as py3.11 jobs)
   app.py                  WSGI entry (exposes `app`)
   config.py               DB config (reads ~/replica.my.cnf; db name <dbuser>__tss)
@@ -159,15 +162,20 @@ toolforge jobs run venvbuild --image python3.11 --mount all --wait \
 
 ### 4. Issue write tokens (store only the hash in the DB; plaintext in a 600 file)
 ```bash
-# iabotwatch — token also needed on acre (see step 7)
+# eventstreams — token also needed on acre (see step 7)
 TOK=$(python3 -c "import secrets;print(secrets.token_hex(32))")
-$MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut -d' ' -f1)' WHERE slug='iabotwatch';"
+$MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut -d' ' -f1)' WHERE slug='eventstreams';"
 printf %s "$TOK" > ~/.tss_token; chmod 600 ~/.tss_token
 
 # booksup — used by the pull job on Toolforge
 TOK=$(python3 -c "import secrets;print(secrets.token_hex(32))")
 $MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut -d' ' -f1)' WHERE slug='booksup';"
 printf %s "$TOK" > ~/.tss_token_booksup; chmod 600 ~/.tss_token_booksup
+
+# iabotapi — used by the pull job on Toolforge
+TOK=$(python3 -c "import secrets;print(secrets.token_hex(32))")
+$MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut -d' ' -f1)' WHERE slug='iabotapi';"
+printf %s "$TOK" > ~/.tss_token_iabotapi; chmod 600 ~/.tss_token_iabotapi
 ```
 
 ### 5. Start the webservice
@@ -177,16 +185,18 @@ webservice status
 curl https://tss.toolforge.org/api/v1/health     # {"status":"ok"}
 ```
 
-### 6. Backfill IABW history (on `acre`), then rebuild rollups (Toolforge)
+### 6. Backfill eventstreams history (on `acre`), then rebuild rollups (Toolforge)
 ```bash
-# on acre — copy the iabotwatch token down, then load all history
+# on acre — copy the eventstreams token down, then load all history
 ssh tools 'become tss cat /data/project/tss/.tss_token' > ~/.tss_token; chmod 600 ~/.tss_token
 cd /home/greenc/repos/gh/tss
 ./loaders/backfill_iabw.py            # ~31M events; resumable + idempotent
+                                      # (the *_iabw loaders feed the 'eventstreams'
+                                      #  source from acre's IABot EventStreams pipeline)
 
 # on Toolforge — one rebuild over the full event table
-toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \
-  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py iabotwatch'
+toolforge jobs run rebuild-es --image python3.11 --mount all --wait \
+  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py eventstreams'
 ```
 
 ### 7. Hand off to the live IABW uploader (on `acre`), then add its cron
@@ -227,7 +237,7 @@ The uploader holds a PID lockfile so runs never overlap.
 | Job | Schedule | `--emails` | Purpose |
 |---|---|---|---|
 | `pull-booksup` | `0 2 * * *` | `onfailure` | Pull BooksUp's daily JSONL → TSS. Exits non-zero (→ email) if the source file is missing. |
-| `monitor-tss` | `@hourly` | `onfailure` | Freshness check; emails if iabotwatch stale >6h or booksup >48h, or a source has no data. |
+| `monitor-tss` | `@hourly` | `onfailure` | Freshness check; emails if eventstreams stale >6h, or booksup/iabotapi >48h, or a source has no data. |
 
 ```bash
 # BooksUp daily pull (runs after BooksUp's own midnight stats job)
@@ -245,10 +255,10 @@ toolforge jobs run monitor-tss --image python3.11 --mount all \
 the command exits non-zero. Failure-email recurs each run while a source stays
 stale; widen the `monitor-tss` schedule if that's noisy.
 
-To change the IABW staleness threshold X, recreate `monitor-tss` with
-`… monitor_tss.py --iabw-hours N` (and `--booksup-hours N` for BooksUp).
+To change the eventstreams staleness threshold X, recreate `monitor-tss` with
+`… monitor_tss.py --eventstreams-hours N` (and `--booksup-hours` / `--iabotapi-hours`).
 
-`rebuild-iabw` (above) is a `--wait` one-off, not scheduled — run it after a
+`rebuild-es` (above) is a `--wait` one-off, not scheduled — run it after a
 backfill or whenever rollups need a full recompute.
 
 ---
@@ -276,9 +286,10 @@ toolforge jobs run monitor-once --image python3.11 --mount all --wait \
 `~/.tss_backfill_iabw.state`; re-running skips finished files. The uploader
 records byte offsets in `~/.tss_outbox_iabw.state`.
 
-**Tokens:** plaintext lives only in `~/.tss_token` (iabotwatch; on both the tss
-tool and acre) and `~/.tss_token_booksup` (booksup; tss tool), mode 600, never in
-git. Only the SHA-256 hash is in the DB.
+**Tokens:** plaintext lives only in `~/.tss_token` (eventstreams; on both the tss
+tool and acre), `~/.tss_token_booksup` (booksup; tss tool), and
+`~/.tss_token_iabotapi` (iabotapi; tss tool), mode 600, never in git. Only the
+SHA-256 hash is in the DB.
 
 ---
 

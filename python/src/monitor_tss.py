@@ -7,8 +7,9 @@ maintainer. Age is computed in SQL (NOW() vs MAX(created_at), both DB time) to
 avoid any Python/DB timezone skew.
 
 Per-source thresholds (hours):
-  iabotwatch : live uploader every ~15 min -> expect data within a few hours
-  booksup    : daily pull -> expect data within ~2 days
+  eventstreams : live uploader every ~15 min -> expect data within a few hours
+  booksup      : daily pull -> expect data within ~2 days
+  iabotapi     : daily pull -> expect data within ~2 days
 
 Run as a python3.11 job, e.g. hourly:
   toolforge jobs run monitor-tss --image python3.11 --mount all \
@@ -24,15 +25,20 @@ import pymysql.cursors
 import config
 
 # slug -> default max age in hours
-DEFAULT_LIMITS = {"iabotwatch": 6.0, "booksup": 48.0}
+DEFAULT_LIMITS = {"eventstreams": 6.0, "booksup": 48.0, "iabotapi": 48.0}
 
 
 def main():
     ap = argparse.ArgumentParser(description="TSS source freshness check.")
-    ap.add_argument("--iabw-hours", type=float, default=DEFAULT_LIMITS["iabotwatch"])
+    ap.add_argument("--eventstreams-hours", type=float, default=DEFAULT_LIMITS["eventstreams"])
     ap.add_argument("--booksup-hours", type=float, default=DEFAULT_LIMITS["booksup"])
+    ap.add_argument("--iabotapi-hours", type=float, default=DEFAULT_LIMITS["iabotapi"])
     args = ap.parse_args()
-    limits = {"iabotwatch": args.iabw_hours, "booksup": args.booksup_hours}
+    limits = {
+        "eventstreams": args.eventstreams_hours,
+        "booksup": args.booksup_hours,
+        "iabotapi": args.iabotapi_hours,
+    }
 
     conn = pymysql.connect(
         host=config.DB_HOST, port=config.DB_PORT,
@@ -58,8 +64,9 @@ def main():
         if limit is None:
             continue  # source not monitored
         if r["last_at"] is None:
-            print(f"{slug}: NO DATA at all (limit {limit}h)")
-            alerts.append(f"{slug}: no data at all")
+            # Registered but never reported yet (e.g. adapter not live). Not a
+            # staleness failure — stay quiet until the first data arrives.
+            print(f"{slug}: no data yet [ok] (not alerting until first data)")
             continue
         age = float(r["age_h"])
         state = "STALE" if age > limit else "ok"

@@ -7,7 +7,7 @@ endpoint. Use a job (not the bastion): the venv is 3.11 but the bastion is 3.13,
 so running the venv python on the bastion fails to import pymysql.
 
     toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \
-      --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py iabotwatch'
+      --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py eventstreams'
 
 It connects to ToolsDB the same way the webservice does (config.py).
 """
