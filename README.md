@@ -85,6 +85,7 @@ loaders/                  (clients/adapters; stdlib only)
   backfill_iabw.py        one-time IABW history load (run on acre)
   upload_outbox_iabw.py   live IABW uploader: byte-offset tail of db files (acre cron)
   pull_booksup.py         daily BooksUp pull from its JSONL (Toolforge job)
+  pull_iabotapi.py        IABot API pull: paced backfill + daily (Toolforge job)
 tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
 ```
 
@@ -237,6 +238,7 @@ The uploader holds a PID lockfile so runs never overlap.
 | Job | Schedule | `--emails` | Purpose |
 |---|---|---|---|
 | `pull-booksup` | `0 2 * * *` | `onfailure` | Pull BooksUp's daily JSONL → TSS. Exits non-zero (→ email) if the source file is missing. |
+| `pull-iabotapi` | `30 2 * * *` | `onfailure` | Pull the recent 2 months from the IABot API → TSS (live). Paced at 5/min. |
 | `monitor-tss` | `@hourly` | `onfailure` | Freshness check; emails if eventstreams stale >6h, or booksup/iabotapi >48h, or a source has no data. |
 
 ```bash
@@ -244,6 +246,11 @@ The uploader holds a PID lockfile so runs never overlap.
 toolforge jobs run pull-booksup --image python3.11 --mount all \
   --schedule "0 2 * * *" --emails onfailure \
   --command 'python3 $HOME/www/loaders/pull_booksup.py >> $HOME/pull_booksup.log 2>&1'
+
+# IABot API daily pull (recent months, live; paced ~5/min by the adapter)
+toolforge jobs run pull-iabotapi --image python3.11 --mount all \
+  --schedule "30 2 * * *" --emails onfailure \
+  --command 'python3 $HOME/www/loaders/pull_iabotapi.py >> $HOME/pull_iabotapi.log 2>&1'
 
 # Hourly freshness monitor (uses the venv python — it needs pymysql)
 toolforge jobs run monitor-tss --image python3.11 --mount all \
@@ -258,8 +265,15 @@ stale; widen the `monitor-tss` schedule if that's noisy.
 To change the eventstreams staleness threshold X, recreate `monitor-tss` with
 `… monitor_tss.py --eventstreams-hours N` (and `--booksup-hours` / `--iabotapi-hours`).
 
-`rebuild-es` (above) is a `--wait` one-off, not scheduled — run it after a
-backfill or whenever rollups need a full recompute.
+**One-off jobs** (not scheduled — note: one-off jobs reject `--timeout`):
+- `rebuild-es` / `rebuild-iabotapi` — `--wait` rollup rebuilds; run after a
+  backfill or whenever rollups need a full recompute.
+- `iabotapi-backfill` — full 2015→present history load (paced ~28 min, resumable
+  via `~/.tss_iabotapi.state`, rollups deferred). Run once, then `rebuild-iabotapi`:
+  ```bash
+  toolforge jobs run iabotapi-backfill --image python3.11 --mount all --emails onfailure \
+    --command 'python3 $HOME/www/loaders/pull_iabotapi.py --backfill >> $HOME/iabotapi_backfill.log 2>&1'
+  ```
 
 ---
 
