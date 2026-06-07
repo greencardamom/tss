@@ -26,6 +26,9 @@ METRICS = [
 
 DAY_FILE_RE = re.compile(r"^(\d{3})\.txt$")  # NNN.txt only (not .details/.italic/...)
 
+# event.entity is VARCHAR(64); a longer "wiki" means a corrupt source line.
+MAX_ENTITY_LEN = 64
+
 
 def doy_to_date(year, doy):
     return datetime.date(year, 1, 1) + datetime.timedelta(days=doy - 1)
@@ -35,10 +38,18 @@ def parse_lines(lines, date_iso):
     """Return TSS event dicts for an iterable of db rows, all dated `date_iso`."""
     events = []
     for line in lines:
+        # Heal NUL-byte corruption: an interrupted append can leave a run of
+        # 0x00 bytes glued to the start of a line (neither awk nor Python splits
+        # on NUL), which both overflows entity and is plain garbage. Stripping
+        # them recovers the real "wiki revid ..." that follows.
+        if "\x00" in line:
+            line = line.replace("\x00", "")
         parts = line.split()
         if len(parts) < 3:
             continue  # need wiki, revid, and at least one counter
         wiki, revid = parts[0], parts[1]
+        if len(wiki) > MAX_ENTITY_LEN:
+            continue  # still implausible after cleaning -> corrupt; skip the row
         for i, raw in enumerate(parts[2:2 + len(METRICS)]):
             try:
                 v = int(raw)
