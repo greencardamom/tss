@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+python/venv/
+
+# Local secrets / config
+*.my.cnf
+.tss_secrets
+
+# Editor
+*.swp

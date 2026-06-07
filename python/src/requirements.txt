@@ -1,0 +1,4 @@
+# Pinned to the versions validated on the Toolforge python3.11 runtime
+# (2026-06-04, matching the bup tool). Rebuild the venv with: pip install -r requirements.txt
+flask==3.1.3
+PyMySQL==1.1.1

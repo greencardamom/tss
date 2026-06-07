@@ -1,0 +1,5 @@
+# 1. once, AFTER the historical backfill, seed offsets so it only tails NEW rows:
+./loaders/upload_outbox_iabw.py --init
+
+# 2. then schedule (token kept out of crontab via ~/.tss_token):
+*/15 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py >> ~/tss_upload.log 2>&1
