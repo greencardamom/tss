@@ -158,7 +158,8 @@ def ssh_stream(cmd):
 
 def list_project_dirs():
     # find (not a glob) avoids ARG_MAX + tcsh 'No match'; -printf gives basenames.
-    rc, out, err = ssh_run("find " + METAIMP +
+    # -L: ~/wm/metaimp is a symlink (-> sharedNFS), so find must follow it.
+    rc, out, err = ssh_run("find -L " + METAIMP +
                            " -maxdepth 1 -type d -name 'imp*' -printf '%f\\n'")
     if rc != 0:
         raise RuntimeError("list dirs failed: " + err.strip()[:200])
@@ -209,8 +210,8 @@ def main():
 
     if args.backfill:
         buf, seen, total = [], set(), 0
-        for line in ssh_stream("find " + METAIMP +
-                               " -name iabget.done -type f -exec cat '{}' +"):
+        for line in ssh_stream("find -L " + METAIMP +
+                               " -maxdepth 2 -name iabget.done -type f -exec cat '{}' +"):
             events, proj, ok = parse_line(line)
             if not ok:
                 unknown.append(line.strip())
