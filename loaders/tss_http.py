@@ -81,26 +81,20 @@ def _evaluate(status, body, n):
     return ("ok", data, 0, "")
 
 
-def post_json(url, token, payload, timeout=120, max_retries=BATCH_RETRIES,
-              on_retry=None):
-    """POST `payload` as JSON to `url` with hardened, escalating backoff.
+def _send(method, url, headers=None, body=None, timeout=120,
+          max_retries=BATCH_RETRIES, on_retry=None):
+    """Issue one request with hardened, escalating backoff; return parsed JSON.
 
-    Returns the parsed JSON response on success. Raises FatalHTTP on a
-    non-retryable error, or RuntimeError when the retry budget is exhausted.
-    `on_retry(attempt, wait, reason)` is called (if given) just before each
-    backoff sleep; `attempt` is the 1-based number of the try that just failed.
+    Raises FatalHTTP on a non-retryable error, or RuntimeError when the retry
+    budget is exhausted. `on_retry(attempt, wait, reason)` (if given) is called
+    just before each backoff sleep; `attempt` is the 1-based number of the try
+    that just failed.
     """
-    body = json.dumps(payload).encode("utf-8")
-    headers = {
-        "Authorization": "Bearer %s" % token,
-        "Content-Type": "application/json",
-    }
-
     for attempt in range(max_retries + 1):
         status = resp_headers = text = None
         try:
-            req = urllib.request.Request(url, data=body, method="POST",
-                                         headers=headers)
+            req = urllib.request.Request(url, data=body, method=method,
+                                         headers=headers or {})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 status = resp.status
                 resp_headers = resp.headers
@@ -128,7 +122,27 @@ def post_json(url, token, payload, timeout=120, max_retries=BATCH_RETRIES,
             try:
                 on_retry(attempt + 1, wait, reason)
             except Exception:
-                pass  # progress reporting must never break the upload
+                pass  # progress reporting must never break the request
         time.sleep(wait)
+    raise RuntimeError("unreachable")
+
+
+def post_json(url, token, payload, timeout=120, max_retries=BATCH_RETRIES,
+              on_retry=None):
+    """POST `payload` as JSON to `url` with hardened, escalating backoff."""
+    headers = {
+        "Authorization": "Bearer %s" % token,
+        "Content-Type": "application/json",
+    }
+    body = json.dumps(payload).encode("utf-8")
+    return _send("POST", url, headers=headers, body=body, timeout=timeout,
+                 max_retries=max_retries, on_retry=on_retry)
+
+
+def get_json(url, headers=None, timeout=120, max_retries=BATCH_RETRIES,
+             on_retry=None):
+    """GET `url` (anonymous by default) and return parsed JSON, same backoff."""
+    return _send("GET", url, headers=headers, body=None, timeout=timeout,
+                 max_retries=max_retries, on_retry=on_retry)
 
     raise RuntimeError("unreachable")
