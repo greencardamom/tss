@@ -39,7 +39,7 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS source (
     source_id      INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    slug           VARCHAR(40)  NOT NULL,           -- 'iabotwatch', 'booksup'
+    slug           VARCHAR(40)  NOT NULL,           -- 'eventstreams', 'booksup', 'iabotapi'
     name           VARCHAR(120) NOT NULL,           -- human-readable title
     description    VARCHAR(255)     NULL,
     -- Drill-through link template. Placeholders {entity} and {ref_id} are filled

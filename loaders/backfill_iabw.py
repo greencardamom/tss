@@ -3,12 +3,12 @@
 
 Reads the legacy IABW day files (db/YYYY/NNN.txt, one line per revision:
 `wiki revid c3 c4 c5 c6 c7 c8`) and POSTs them to TSS as events for the
-'iabotwatch' source, with rollups DEFERRED. After all events are loaded, rebuild
+'eventstreams' source, with rollups DEFERRED. After all events are loaded, rebuild
 rollups once on Toolforge -- as a python3.11 JOB (the venv is 3.11; the bastion
 is 3.13, so running the venv python on the bastion fails to import pymysql):
 
     toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \
-      --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py iabotwatch'
+      --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py eventstreams'
 
 Designed to run on acre, where the db files live. Stdlib only (no requests).
 HTTP goes through tss_http (the shared hardened retry/backoff helper, ported from
@@ -86,7 +86,7 @@ def main():
                     default="/home/greenc/toolforge/iabotwatch/www/db",
                     help="directory containing YYYY/NNN.txt day files")
     ap.add_argument("--api", default=API_DEFAULT, help="TSS API base URL")
-    ap.add_argument("--token", help="iabotwatch write token")
+    ap.add_argument("--token", help="eventstreams write token")
     ap.add_argument("--token-file", help="file containing the write token")
     ap.add_argument("--years", help="e.g. 2020-2024 or 2021,2023 (default: all found)")
     ap.add_argument("--batch-size", type=int, default=1000)
@@ -143,7 +143,7 @@ def main():
             save_state(state_path, done)
             print(f"\nFATAL at {key}: {e}", file=sys.stderr)
             print("  Check the write token and that sql/seed.sql loaded the "
-                  "iabotwatch metrics.", file=sys.stderr)
+                  "eventstreams metrics.", file=sys.stderr)
             sys.exit(1)
         except RuntimeError as e:
             save_state(state_path, done)
@@ -160,7 +160,7 @@ def main():
         print("\nNext: rebuild rollups as a python3.11 job ON TOOLFORGE:")
         print("  toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \\")
         print("    --command '$HOME/www/python/venv/bin/python "
-              "$HOME/www/python/src/rebuild_rollups.py iabotwatch'")
+              "$HOME/www/python/src/rebuild_rollups.py eventstreams'")
 
 
 if __name__ == "__main__":
