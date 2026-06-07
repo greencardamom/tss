@@ -17,11 +17,17 @@ finished. The ongoing poll tracks each project as:
   pending    - dir exists, no iabget.done yet -> retry next run (tries counter)
   abandoned  - gave up after --max-tries (default 3 ~= 3 daily polls) (terminal)
 
+One checkpointed per-project loop: it lists project dirs and processes each not-yet
+-terminal one (fetch iabget.done -> parse -> post -> mark done), saving state after
+EVERY project. A crash resumes from the next unfinished project — no re-streaming,
+no re-sending completed work.
+
 Modes:
-  --backfill   stream ALL completed projects once (deferred rollups); then rebuild:
+  --backfill   process all completed projects, rollups DEFERRED; then rebuild:
                  rebuild_rollups.py medic_iabotdb   (as a python3.11 job on Toolforge)
-  (default)    poll: process not-yet-terminal project dirs; ingest finished ones
-               (live rollups), advance/abandon the unfinished. For the acre cron.
+  (default)    poll for the acre cron: live rollups; same loop. Either way, dirs
+               with no iabget.done yet stay 'pending' and retry, 'abandoned' after
+               --max-tries.
 
 Idempotent (ext_key = "<IMPID>:<metric>"). sheep runs tcsh -> remote commands are
 tcsh-safe (no $(), no 2>). Token: --token / --token-file / ~/.tss_token_medic_iabotdb
@@ -148,16 +154,6 @@ def ssh_run(cmd):
     return p.returncode, p.stdout, p.stderr
 
 
-def ssh_stream(cmd):
-    p = subprocess.Popen(_SSH + [cmd], stdout=subprocess.PIPE, text=True,
-                         errors="replace", bufsize=1)
-    for line in p.stdout:
-        yield line
-    p.wait()
-    if p.returncode != 0:
-        raise RuntimeError(f"ssh stream failed (rc={p.returncode}): {cmd}")
-
-
 def list_project_dirs():
     # find (not a glob) avoids ARG_MAX + tcsh 'No match'; -printf gives basenames.
     # -L: ~/wm/metaimp is a symlink (-> sharedNFS), so find must follow it.
@@ -181,7 +177,8 @@ def fetch_iabget_done(base):
 def main():
     ap = argparse.ArgumentParser(description="WaybackMedic IABot-DB work -> TSS.")
     ap.add_argument("--backfill", action="store_true",
-                    help="stream all completed projects once, rollups deferred")
+                    help="process all completed projects (deferred rollups); "
+                         "checkpointed per project, so safe to re-run after a crash")
     ap.add_argument("--api", default=API_DEFAULT)
     ap.add_argument("--token")
     ap.add_argument("--token-file")
@@ -210,65 +207,57 @@ def main():
             tss_http.post_json(url, token, {"events": events[i:i + args.batch_size]},
                                max_retries=tss_http.BATCH_RETRIES, on_retry=on_retry)
 
-    if args.backfill:
-        buf, seen, total = [], set(), 0
-        for line in ssh_stream("find -L " + METAIMP +
-                               " -maxdepth 2 -name iabget.done -type f -exec cat '{}' +"):
-            events, proj, ok = parse_line(line)
+    # One checkpointed per-project loop for both backfill and ongoing poll.
+    # State is saved after EVERY project, so a crash resumes from the next
+    # unfinished project — no re-streaming or re-sending completed work.
+    # backfill: deferred rollups (rebuild after); poll: live rollups.
+    defer = args.backfill
+    dirs = list_project_dirs()
+    ingested = pending = abandoned = skipped = total = 0
+    for base in dirs:
+        status = projects.get(base, {}).get("status")
+        if status in ("done", "abandoned"):
+            skipped += 1
+            continue
+        lines = fetch_iabget_done(base)
+        if lines is None:                      # dir exists but not finished yet
+            tries = projects.get(base, {}).get("tries", 0) + 1
+            if tries >= args.max_tries:
+                projects[base] = {"status": "abandoned", "tries": tries}
+                print(f"  GAVE UP after {tries} polls (no iabget.done): {base}",
+                      file=sys.stderr)
+                abandoned += 1
+            else:
+                projects[base] = {"status": "pending", "tries": tries}
+                pending += 1
+            save_state(args.state, projects)
+            continue
+        buf = []
+        for line in lines:
+            events, _proj, ok = parse_line(line)
             if not ok:
                 unknown.append(line.strip())
                 continue
-            if not events:
-                continue
-            seen.add(proj)
             buf.extend(events)
-            total += len(events)
-            if len(buf) >= args.batch_size:
-                post(buf, defer=True)
-                buf = []
-        post(buf, defer=True)
-        for proj in seen:
-            projects[proj] = {"status": "done"}
-        save_state(args.state, projects)
-        print(f"backfill: {len(seen)} projects, {total} events (deferred)")
-        if total:
-            print("Next: rebuild rollups as a python3.11 job on Toolforge:")
-            print("  toolforge jobs run rebuild-medic --image python3.11 --mount all --wait \\")
-            print("    --command '$HOME/www/python/venv/bin/python "
-                  "$HOME/www/python/src/rebuild_rollups.py medic_iabotdb'")
-    else:
-        dirs = list_project_dirs()
-        done = pending = abandoned = 0
-        for base in dirs:
-            status = projects.get(base, {}).get("status")
-            if status in ("done", "abandoned"):
-                continue
-            lines = fetch_iabget_done(base)
-            if lines is None:
-                tries = projects.get(base, {}).get("tries", 0) + 1
-                if tries >= args.max_tries:
-                    projects[base] = {"status": "abandoned", "tries": tries}
-                    print(f"  GAVE UP after {tries} polls (no iabget.done): {base}",
-                          file=sys.stderr)
-                    abandoned += 1
-                else:
-                    projects[base] = {"status": "pending", "tries": tries}
-                    pending += 1
-                save_state(args.state, projects)
-                continue
-            buf = []
-            for line in lines:
-                events, _proj, ok = parse_line(line)
-                if not ok:
-                    unknown.append(line.strip())
-                    continue
-                buf.extend(events)
-            post(buf, defer=False)  # live rollups
-            projects[base] = {"status": "done"}
-            save_state(args.state, projects)
-            done += 1
-        print(f"poll: {done} ingested, {pending} pending, {abandoned} abandoned, "
-              f"of {len(dirs)} dirs")
+        try:
+            post(buf, defer=defer)
+        except (tss_http.FatalHTTP, RuntimeError) as e:
+            print(f"\nstopped at {base}: {e}\n  checkpoint saved "
+                  f"({ingested} projects done this run); re-run to resume",
+                  file=sys.stderr)
+            sys.exit(1)
+        projects[base] = {"status": "done"}
+        save_state(args.state, projects)       # checkpoint AFTER this project lands
+        ingested += 1
+        total += len(buf)
+    print(f"{'backfill' if args.backfill else 'poll'}: {ingested} ingested "
+          f"({total} events), {pending} pending, {abandoned} abandoned, "
+          f"{skipped} already-done, of {len(dirs)} dirs")
+    if args.backfill and ingested:
+        print("Next: rebuild rollups as a python3.11 job on Toolforge:")
+        print("  toolforge jobs run rebuild-medic --image python3.11 --mount all --wait \\")
+        print("    --command '$HOME/www/python/venv/bin/python "
+              "$HOME/www/python/src/rebuild_rollups.py medic_iabotdb'")
 
     if unknown:
         print(f"\nTRAP: {len(unknown)} unparsed/non-modifyurl line(s) — surfacing:",
