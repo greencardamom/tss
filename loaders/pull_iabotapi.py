@@ -89,15 +89,22 @@ def _on_retry(attempt, wait, reason):
 
 
 def fetch_month(year, month):
-    """Return the statistics list for one (year, month), all wikis."""
+    """Return the statistics list for one (year, month), all wikis.
+
+    Empty periods (e.g. before IABot had activity) come back as
+    {"result":"fail","statistics":[]} -- that's "no data", not an error, so we
+    return [] and let the caller skip. Only a structurally unexpected response
+    (not a dict / no statistics array) is treated as an error.
+    """
     url = (f"{IABOT_API}?action=statistics"
            f"&only-year={year}&only-month={month}&format=flat")
     data = tss_http.get_json(url, max_retries=tss_http.BATCH_RETRIES,
                              on_retry=_on_retry)
-    if not isinstance(data, dict) or data.get("result") != "success":
+    if not isinstance(data, dict) or "statistics" not in data:
         raise RuntimeError(
-            f"IABot API non-success for {year}-{month:02d}: {str(data)[:200]}")
-    return data.get("statistics", [])
+            f"IABot API unexpected response for {year}-{month:02d}: {str(data)[:200]}")
+    stats = data.get("statistics")
+    return stats if isinstance(stats, list) else []
 
 
 def rows_to_events(rows):
@@ -213,6 +220,7 @@ def main():
             sys.exit(1)
         events = rows_to_events(rows)
         if not events:
+            print(f"  {key}: no data")
             done.add(key)
             save_done(state_path, done)
             continue
