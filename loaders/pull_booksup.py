@@ -135,9 +135,11 @@ def main():
     args = ap.parse_args()
 
     events, days, skipped = [], 0, 0
+    found_file = False
     for year in parse_years(args.years):
         lines, src = read_year(year, args.src_dir, args.url_base)
         if lines:
+            found_file = True
             print(f"read {len(lines)} day(s) from {src}")
         for line in lines:
             line = line.strip()
@@ -155,6 +157,15 @@ def main():
 
     print(f"parsed {days} day(s) -> {len(events)} events"
           + (f" (skipped {skipped} malformed line(s))" if skipped else ""))
+
+    # No source file found at all (current+previous year) => BooksUp's publishing
+    # is broken/missing. Exit non-zero so the job's --emails onfailure alerts.
+    if not found_file:
+        print("ALERT: no BooksUp stats file found (local or URL) for "
+              f"{args.years or 'current+previous year'} — is BooksUp publishing?",
+              file=sys.stderr)
+        sys.exit(1)
+
     if args.dry_run:
         return
     if not events:
