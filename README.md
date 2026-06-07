@@ -60,12 +60,10 @@ sql tools    # opens the ToolsDB client for this tool
 #   SOURCE ~/www/sql/schema.sql;
 #   SOURCE ~/www/sql/seed.sql;
 
-# 2. build the venv inside the runtime image
-webservice python3.11 shell
-  python3 -m venv ~/www/python/venv
-  source ~/www/python/venv/bin/activate
-  pip install -r ~/www/python/src/requirements.txt
-  exit
+# 2. build the venv in the python3.11 image (NOT on the bastion: it is py3.13,
+#    the runtime is py3.11 -- build/verify venvs inside the runtime image)
+toolforge jobs run venvbuild --image python3.11 --mount all --wait \
+  --command 'python3 -m venv $HOME/www/python/venv && $HOME/www/python/venv/bin/pip install --no-cache-dir -r $HOME/www/python/src/requirements.txt'
 
 # 3. issue a write token for a source (store only its hash)
 sql tools
@@ -79,6 +77,16 @@ webservice status
 `config.py` derives the DB name as `<replica.my.cnf user>__tss`; override with
 `TSS_DB_NAME`. The optional admin endpoints require `TSS_ADMIN_TOKEN` in the
 environment.
+
+## Rebuild rollups
+
+Run as a python3.11 job (a full rebuild can exceed the HTTP timeout, and the
+venv python only works inside the 3.11 image):
+
+```bash
+toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \
+  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py iabotwatch'
+```
 
 ## Redeploy
 
