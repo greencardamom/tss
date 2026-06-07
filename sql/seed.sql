@@ -131,3 +131,42 @@ ON DUPLICATE KEY UPDATE
     value_type  = VALUES(value_type),
     default_agg = VALUES(default_agg),
     category    = VALUES(category);
+
+
+-- ----------------------------------------------------------------------------
+-- Source: medic_iabotdb  (WaybackMedic's work in the IABot DB; global, no entity)
+--   Per iabget.done line (one IABot-DB update) -> one archive-op metric + one
+--   status metric. Bucketed by the project-name date in each line's IMPID.
+--   Non-modifyurl/unparseable lines are trapped (logged) by the adapter, not
+--   stored. "permadead"/"permalive" = IABot's blacklist(6)/whitelist(7).
+-- ----------------------------------------------------------------------------
+INSERT INTO source (slug, name, description, ref_url_tpl)
+VALUES (
+    'medic_iabotdb',
+    'WaybackMedic — IABot DB',
+    'Per-day counts of WaybackMedic''s updates to the IABot DB (archive add/modify/delete + URL status changes); since 2016.',
+    NULL
+)
+ON DUPLICATE KEY UPDATE
+    name        = VALUES(name),
+    description = VALUES(description),
+    ref_url_tpl = VALUES(ref_url_tpl);
+
+SET @med = (SELECT source_id FROM source WHERE slug = 'medic_iabotdb');
+
+INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, category) VALUES
+    (@med, 'archive_add',    'Archives added',       'urls', 'count', 'sum', 'Archive'),
+    (@med, 'archive_modify', 'Archives modified',    'urls', 'count', 'sum', 'Archive'),
+    (@med, 'archive_delete', 'Archives deleted',     'urls', 'count', 'sum', 'Archive'),
+    (@med, 'status_only',    'Status-only changes',  'urls', 'count', 'sum', 'Archive'),
+    (@med, 'set_dead',       'Set dead',             'urls', 'count', 'sum', 'Status'),
+    (@med, 'set_alive',      'Set alive',            'urls', 'count', 'sum', 'Status'),
+    (@med, 'set_paywall',    'Set paywall',          'urls', 'count', 'sum', 'Status'),
+    (@med, 'set_permadead',  'Set permadead',        'urls', 'count', 'sum', 'Status'),
+    (@med, 'set_permalive',  'Set permalive',        'urls', 'count', 'sum', 'Status')
+ON DUPLICATE KEY UPDATE
+    label       = VALUES(label),
+    unit        = VALUES(unit),
+    value_type  = VALUES(value_type),
+    default_agg = VALUES(default_agg),
+    category    = VALUES(category);
