@@ -2,10 +2,12 @@
 """rebuild_rollups.py - full rollup rebuild for one source (run on Toolforge).
 
 A set-based rebuild can take minutes on a large source, longer than the web
-proxy's request timeout, so run it directly (job or bastion) rather than via the
-HTTP endpoint:
+proxy's request timeout, so run it as a python3.11 JOB rather than via the HTTP
+endpoint. Use a job (not the bastion): the venv is 3.11 but the bastion is 3.13,
+so running the venv python on the bastion fails to import pymysql.
 
-    ~/www/python/venv/bin/python ~/www/python/src/rebuild_rollups.py iabotwatch
+    toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \
+      --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py iabotwatch'
 
 It connects to ToolsDB the same way the webservice does (config.py).
 """

@@ -27,26 +27,14 @@ import sys
 
 import iabw_parse
 import tss_http
+import tss_token
 
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
 STATE_DEFAULT = os.path.expanduser("~/.tss_outbox_iabw.state")
 LOCK_DEFAULT = os.path.expanduser("~/.tss_outbox_iabw.lock")
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token")
 
 
-# --- token / state / lock --------------------------------------------------
-
-def resolve_token(args):
-    if args.token:
-        return args.token
-    for path in (args.token_file, TOKEN_FILE_DEFAULT):
-        if path and os.path.exists(path):
-            with open(path) as fh:
-                tok = fh.read().strip()
-            if tok:
-                return tok
-    return os.environ.get("TSS_TOKEN")
-
+# --- state / lock ----------------------------------------------------------
 
 def load_offsets(path):
     if path and os.path.exists(path):
@@ -167,7 +155,7 @@ def main():
         print(f"init: seeded offsets for {n} files; uploads will tail new rows")
         return
 
-    token = resolve_token(args)
+    token = tss_token.resolve(args.token, args.token_file)
     if not token:
         ap.error("no write token (--token, --token-file, $TSS_TOKEN, or ~/.tss_token)")
 

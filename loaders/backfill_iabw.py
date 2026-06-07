@@ -4,9 +4,11 @@
 Reads the legacy IABW day files (db/YYYY/NNN.txt, one line per revision:
 `wiki revid c3 c4 c5 c6 c7 c8`) and POSTs them to TSS as events for the
 'iabotwatch' source, with rollups DEFERRED. After all events are loaded, rebuild
-rollups once on Toolforge:
+rollups once on Toolforge -- as a python3.11 JOB (the venv is 3.11; the bastion
+is 3.13, so running the venv python on the bastion fails to import pymysql):
 
-    ~/www/python/venv/bin/python ~/www/python/src/rebuild_rollups.py iabotwatch
+    toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \
+      --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py iabotwatch'
 
 Designed to run on acre, where the db files live. Stdlib only (no requests).
 HTTP goes through tss_http (the shared hardened retry/backoff helper, ported from
@@ -25,6 +27,7 @@ import sys
 
 import iabw_parse
 import tss_http
+import tss_token
 
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
 
@@ -83,8 +86,8 @@ def main():
                     default="/home/greenc/toolforge/iabotwatch/www/db",
                     help="directory containing YYYY/NNN.txt day files")
     ap.add_argument("--api", default=API_DEFAULT, help="TSS API base URL")
-    ap.add_argument("--token", default=os.environ.get("TSS_TOKEN"),
-                    help="iabotwatch write token (or env TSS_TOKEN)")
+    ap.add_argument("--token", help="iabotwatch write token")
+    ap.add_argument("--token-file", help="file containing the write token")
     ap.add_argument("--years", help="e.g. 2020-2024 or 2021,2023 (default: all found)")
     ap.add_argument("--batch-size", type=int, default=1000)
     ap.add_argument("--state",
@@ -94,8 +97,11 @@ def main():
                     help="parse and count only; do not POST")
     args = ap.parse_args()
 
-    if not args.dry_run and not args.token:
-        ap.error("a write token is required (--token or TSS_TOKEN); or use --dry-run")
+    # --token, then --token-file, then $TSS_TOKEN, then ~/.tss_token
+    token = tss_token.resolve(args.token, args.token_file)
+    if not args.dry_run and not token:
+        ap.error("no write token (--token, --token-file, $TSS_TOKEN, or "
+                 "~/.tss_token); or use --dry-run")
 
     years = parse_years(args.years)
     if years is None:
@@ -130,7 +136,7 @@ def main():
 
         try:
             for i in range(0, len(events), args.batch_size):
-                post_events(args.api, args.token, events[i:i + args.batch_size])
+                post_events(args.api, token, events[i:i + args.batch_size])
         except tss_http.FatalHTTP as e:
             # Non-retryable (bad token / unknown metric / malformed): stop, don't
             # mark this file done so a fixed re-run resumes here (idempotent).
@@ -151,8 +157,10 @@ def main():
     print(f"\nfiles processed: {total_files} (skipped {skipped} already done), "
           f"events: {total_events}")
     if not args.dry_run:
-        print("\nNext: rebuild rollups ON TOOLFORGE (avoids the HTTP timeout):")
-        print("  ~/www/python/venv/bin/python ~/www/python/src/rebuild_rollups.py iabotwatch")
+        print("\nNext: rebuild rollups as a python3.11 job ON TOOLFORGE:")
+        print("  toolforge jobs run rebuild-iabw --image python3.11 --mount all --wait \\")
+        print("    --command '$HOME/www/python/venv/bin/python "
+              "$HOME/www/python/src/rebuild_rollups.py iabotwatch'")
 
 
 if __name__ == "__main__":
