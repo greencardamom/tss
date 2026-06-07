@@ -143,12 +143,14 @@ _SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", SHEEP]
 
 
 def ssh_run(cmd):
-    p = subprocess.run(_SSH + [cmd], capture_output=True, text=True)
+    # errors='replace': iabget.done can contain non-UTF-8 bytes (Latin-1 in URLs).
+    p = subprocess.run(_SSH + [cmd], capture_output=True, text=True, errors="replace")
     return p.returncode, p.stdout, p.stderr
 
 
 def ssh_stream(cmd):
-    p = subprocess.Popen(_SSH + [cmd], stdout=subprocess.PIPE, text=True, bufsize=1)
+    p = subprocess.Popen(_SSH + [cmd], stdout=subprocess.PIPE, text=True,
+                         errors="replace", bufsize=1)
     for line in p.stdout:
         yield line
     p.wait()
