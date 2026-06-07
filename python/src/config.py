@@ -27,8 +27,10 @@ DB_NAME = os.environ.get("TSS_DB_NAME") or (
     f"{_db_user()}__tss" if _db_user() else "tss"
 )
 
-# Largest event batch accepted in a single POST /events.
-MAX_BATCH = int(os.environ.get("TSS_MAX_BATCH", "1000"))
+# Largest event batch accepted in a single POST /events. Big batches sharply cut
+# per-request round-trip overhead for bulk backfills (~10k events ~= a couple MB,
+# well under ToolsDB max_allowed_packet).
+MAX_BATCH = int(os.environ.get("TSS_MAX_BATCH", "25000"))
 
 # Optional admin token (plaintext) for the source/metric registration endpoints.
 # Registration can also be done directly via sql/seed.sql, so this is optional.
