@@ -31,20 +31,21 @@
       return r.json();
     });
   }
-  function srcName(s) { return t("source." + s.slug, s.name || s.slug); }
+  function groupLabel(g) { return t(g.label_key, g.id); }
   function metLabel(srcSlug, m) {
     return t("metric." + srcSlug + "." + m.slug, m.label || m.slug);
   }
 
+  // CATALOG = pulldown GROUPS from /catalog: {id, house, source, label_key, metrics}.
   var CATALOG = [];
-  var state = { house: "activity", source: null, metrics: [], grain: "year",
+  var state = { house: "activity", group: null, metrics: [], grain: "year",
                 display: "grid", wiki: "", summary: false };
 
   // --- URL permalinks ------------------------------------------------------
   function readUrl() {
     var p = new URLSearchParams(location.search);
     if (p.get("house")) state.house = p.get("house");
-    if (p.get("source")) state.source = p.get("source");
+    if (p.get("group")) state.group = p.get("group");
     if (p.get("metrics")) state.metrics = p.get("metrics").split(",").filter(Boolean);
     if (p.get("grain")) state.grain = p.get("grain");
     if (p.get("display")) state.display = p.get("display");
@@ -54,7 +55,7 @@
   function writeUrl() {
     var p = new URLSearchParams();
     p.set("house", state.house);
-    if (state.source) p.set("source", state.source);
+    if (state.group) p.set("group", state.group);
     if (state.metrics.length) p.set("metrics", state.metrics.join(","));
     p.set("grain", state.grain);
     p.set("display", state.display);
@@ -64,11 +65,11 @@
     history.replaceState(null, "", location.pathname + "?" + p.toString());
   }
 
-  function sourcesIn(house) {
-    return CATALOG.filter(function (s) { return s.house === house; });
+  function groupsIn(house) {
+    return CATALOG.filter(function (g) { return g.house === house; });
   }
-  function curSource() {
-    return CATALOG.filter(function (s) { return s.slug === state.source; })[0];
+  function curGroup() {
+    return CATALOG.filter(function (g) { return g.id === state.group; })[0];
   }
 
   // --- control panel -------------------------------------------------------
@@ -98,30 +99,30 @@
       { v: "activity", label: t("ui.house.activity") },
       { v: "inventory", label: t("ui.house.inventory") }
     ], function (v) {
-      state.house = v; state.source = null; state.metrics = []; renderControls();
+      state.house = v; state.group = null; state.metrics = []; renderControls();
     })));
 
-    // Source (within house)
-    var srcs = sourcesIn(state.house);
-    var have = srcs.some(function (s) { return s.slug === state.source; });
-    if ((!state.source || !have) && srcs.length) {
-      var prefer = state.house === "activity" ? "eventstreams" : "arcstat";
-      var p = srcs.filter(function (s) { return s.slug === prefer; })[0];
-      state.source = (p || srcs[0]).slug;
+    // Dataset (group) within house
+    var groups = groupsIn(state.house);
+    var have = groups.some(function (g) { return g.id === state.group; });
+    if ((!state.group || !have) && groups.length) {
+      var prefer = state.house === "activity" ? "eventstreams" : "arcstat_links";
+      var p = groups.filter(function (g) { return g.id === prefer; })[0];
+      state.group = (p || groups[0]).id;
     }
     var sel = el("select", { on: { change: function (e) {
-      state.source = e.target.value; state.metrics = []; renderControls();
+      state.group = e.target.value; state.metrics = []; renderControls();
     } } });
-    srcs.forEach(function (s) {
-      var o = el("option", { value: s.slug, text: srcName(s) });
-      if (s.slug === state.source) o.selected = true;
+    groups.forEach(function (g) {
+      var o = el("option", { value: g.id, text: groupLabel(g) });
+      if (g.id === state.group) o.selected = true;
       sel.appendChild(o);
     });
     f.appendChild(field("ui.source", sel));
 
     // Tables (metrics) — multi-select
-    var src = curSource();
-    var mets = src ? src.metrics : [];
+    var grp = curGroup();
+    var mets = grp ? grp.metrics : [];
     if (!state.metrics.length && mets.length)
       state.metrics = mets.map(function (m) { return m.slug; });
     var box = el("div", { "class": "checks" });
@@ -134,7 +135,7 @@
           box.querySelectorAll("input:checked"), function (x) { return x.value; });
       });
       box.appendChild(el("span", { "class": "chk" }, inp,
-        el("label", { "for": id, text: metLabel(state.source, m) })));
+        el("label", { "for": id, text: metLabel(grp ? grp.source : "", m) })));
     });
     f.appendChild(field("ui.tables", box));
 
@@ -183,7 +184,8 @@
     var result = document.getElementById("result");
     result.innerHTML = "";
     var status = document.getElementById("status");
-    if (!state.source || !state.metrics.length) { status.textContent = ""; return; }
+    var grp = curGroup();
+    if (!grp || !state.metrics.length) { status.textContent = ""; return; }
     status.textContent = t("ui.loading");
 
     var rg = rangeFor(state.grain);
@@ -191,7 +193,7 @@
       (rg.from ? "&from=" + rg.from : "") + (rg.to ? "&to=" + rg.to : "");
 
     var jobs = state.metrics.map(function (slug) {
-      return api("/grid?source=" + encodeURIComponent(state.source) +
+      return api("/grid?source=" + encodeURIComponent(grp.source) +
         "&metric=" + encodeURIComponent(slug) + qs);
     });
     Promise.all(jobs).then(function (grids) {
@@ -318,7 +320,7 @@
     api("/catalog").then(function (cat) {
       CATALOG = cat;
       renderControls();
-      if (state.source && state.metrics.length) run();
+      if (state.group && state.metrics.length) run();
     }).catch(function (e) {
       document.getElementById("status").textContent = "" + e;
     });

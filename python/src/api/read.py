@@ -1,11 +1,45 @@
 """Public (no-auth) read endpoints: catalog, series, drill-through."""
 import json
+import os
 
 from flask import Blueprint, request, jsonify
 
 from db import get_db
 
 bp = Blueprint("read", __name__)
+
+# Optional pulldown groupings (config, no code): a source may be split into named
+# metric subsets; unlisted sources default to one group = the whole source.
+_GROUPS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "groups.json")
+_groups_cache = None
+
+
+def _group_overrides():
+    global _groups_cache
+    if _groups_cache is None:
+        try:
+            with open(_GROUPS_PATH, encoding="utf-8") as fh:
+                _groups_cache = {k: v for k, v in json.load(fh).items()
+                                 if not k.startswith("_")}
+        except (OSError, ValueError):
+            _groups_cache = {}
+    return _groups_cache
+
+
+def _filter_metrics(metrics, gdef):
+    cats = gdef.get("categories")
+    excl = set(gdef.get("exclude_categories") or [])
+    inc = set(gdef.get("include_metrics") or [])
+    out = []
+    for m in metrics:
+        c = m.get("category")
+        if cats is not None:
+            if c in cats or m["slug"] in inc:
+                out.append(m)
+        elif c not in excl or m["slug"] in inc:
+            out.append(m)
+    return out
 
 
 def _num(v):
@@ -186,9 +220,12 @@ def events():
 
 @bp.get("/catalog")
 def catalog():
-    """One call that powers the dashboard control panel: every source with its
-    metrics, plus a derived `house` (flow vs gauge). house='inventory' when ALL
-    of a source's metrics are gauges (levels), else 'activity' (work-per-period)."""
+    """One call that powers the dashboard control panel: the pulldown GROUPS,
+    each with its metrics and a derived `house` (flow vs gauge). house='inventory'
+    when ALL of the source's metrics are gauges (levels), else 'activity'. A group
+    is normally one source; groups.json may split a source into metric subsets
+    (e.g. arcstat -> archive links + media). Each group: {id, house, source,
+    label_key (for i18n; falls back to source.<slug>), metrics}."""
     cur = get_db().cursor()
     cur.execute("SELECT source_id, slug, name, description FROM source "
                 "WHERE is_active=1 ORDER BY slug")
@@ -200,14 +237,21 @@ def catalog():
         by_src.setdefault(m["source_id"], []).append(
             {k: m[k] for k in ("slug", "label", "unit", "value_type",
                                "default_agg", "category")})
+    overrides = _group_overrides()
     out = []
     for s in sources:
         ms = by_src.get(s["source_id"], [])
         house = "inventory" if ms and all(m["value_type"] == "gauge"
                                           for m in ms) else "activity"
-        out.append({"slug": s["slug"], "name": s["name"],
-                    "description": s["description"], "house": house,
-                    "metrics": ms})
+        defs = overrides.get(s["slug"])
+        if defs:
+            for d in defs:
+                out.append({"id": d["id"], "house": house, "source": s["slug"],
+                            "label_key": d.get("label_key", "source." + s["slug"]),
+                            "metrics": _filter_metrics(ms, d)})
+        else:
+            out.append({"id": s["slug"], "house": house, "source": s["slug"],
+                        "label_key": "source." + s["slug"], "metrics": ms})
     return jsonify(out)
 
 
