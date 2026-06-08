@@ -29,7 +29,7 @@ trap cleanup EXIT                 # always leave /beater clean, even on error
 rm -rf "$DEST"; mkdir -p "$DEST"  # start clean (also clears any killed-run leftover)
 echo "=== $(date '+%F %T') sync_medic: rsync from rabbit ==="
 rsync -rt --prune-empty-dirs \
-  --include='*/' --include='iabget.done' --exclude='*' \
+  --include='*/' --include='iabget.done' --include='iabget.orig' --exclude='*' \
   -e 'ssh -o BatchMode=yes -o ConnectTimeout=30' \
   "rabbit:$RABBIT_METAIMP/" "$DEST/"
 
