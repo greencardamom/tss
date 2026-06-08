@@ -1,6 +1,7 @@
 -- ============================================================================
 -- Tarb Stats Server (TSS) — seed data
--- Registers sources (eventstreams, booksup, iabotapi) and their metrics.
+-- Registers sources (eventstreams, booksup, iabotapi, medic_iabotdb, medic_enwiki)
+-- and their metrics.
 -- Sources are named after the API/service the data comes FROM.
 --
 -- Re-runnable: every INSERT uses ON DUPLICATE KEY UPDATE, so running this again
@@ -164,6 +165,48 @@ INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, categ
     (@med, 'set_paywall',    'Set paywall',          'urls', 'count', 'sum', 'Status'),
     (@med, 'set_permadead',  'Set permadead',        'urls', 'count', 'sum', 'Status'),
     (@med, 'set_permalive',  'Set permalive',        'urls', 'count', 'sum', 'Status')
+ON DUPLICATE KEY UPDATE
+    label       = VALUES(label),
+    unit        = VALUES(unit),
+    value_type  = VALUES(value_type),
+    default_agg = VALUES(default_agg),
+    category    = VALUES(category);
+
+
+-- ----------------------------------------------------------------------------
+-- Source: medic_enwiki  (WaybackMedic's dead-link REPAIRS on English Wikipedia;
+--   global, no entity). One project = a ~/wm/meta/<name>.<range>/ directory; its
+--   work-date is the mtime of discovered.orig (the push script writes that file
+--   only after edits land on enwiki, so it doubles as the "project finished"
+--   signal). Counts are computed straight from the project's logs on `rabbit`
+--   (the SAME numbers the per-project tcsh `stats` script reports), NOT via stats.
+--
+--   File-presence = data-presence: a metric is recorded only when its source log
+--   exists; an absent log (older projects predate that feature) is NO DATA, not a
+--   zero. So back through time, pages_edited/archives_added reach ~2015, while
+--   status_* (urlchanger, ~2021+) and links_moved (syslog 7.1 redirects, softredir
+--   era ~Nov-2024+) only appear once those features existed.
+-- ----------------------------------------------------------------------------
+INSERT INTO source (slug, name, description, ref_url_tpl)
+VALUES (
+    'medic_enwiki',
+    'WaybackMedic — English Wikipedia',
+    'Per-day counts of WaybackMedic''s dead-link repairs on English Wikipedia (links moved to new URLs, archive URLs added, url-status flips, pages edited); since 2015.',
+    NULL
+)
+ON DUPLICATE KEY UPDATE
+    name        = VALUES(name),
+    description = VALUES(description),
+    ref_url_tpl = VALUES(ref_url_tpl);
+
+SET @mew = (SELECT source_id FROM source WHERE slug = 'medic_enwiki');
+
+INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, category) VALUES
+    (@mew, 'links_moved',     'Links moved to new URL',     'links', 'count', 'sum', 'Links'),
+    (@mew, 'archives_added',  'Archive URLs added',         'urls',  'count', 'sum', 'Archive'),
+    (@mew, 'status_to_live',  'Switched dead -> live',      'links', 'count', 'sum', 'Status'),
+    (@mew, 'status_to_dead',  'Switched live -> dead',      'links', 'count', 'sum', 'Status'),
+    (@mew, 'pages_edited',    'Pages edited',               'pages', 'count', 'sum', 'Pages')
 ON DUPLICATE KEY UPDATE
     label       = VALUES(label),
     unit        = VALUES(unit),
