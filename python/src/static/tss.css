@@ -41,6 +41,15 @@ button.go {
 }
 button.go:hover { background: #2a4b8d; }
 
+.pnav { display: inline-flex; align-items: center; gap: 6px; }
+.navbtn {
+  border: 1px solid var(--line); background: #fff; border-radius: 4px;
+  padding: 3px 9px; cursor: pointer; font-size: 13px; line-height: 1;
+}
+.navbtn:hover:not(:disabled) { background: var(--head); color: var(--accent); }
+.navbtn:disabled { opacity: .4; cursor: default; }
+.plabel { min-width: 92px; text-align: center; font-weight: 600; }
+
 #status { min-height: 18px; margin: 6px 2px; font-size: 13px; }
 
 .block { margin: 0 0 26px; }

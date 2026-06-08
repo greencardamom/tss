@@ -14,6 +14,8 @@
   "ui.grain.day": "Daily",
   "ui.grain.month": "Monthly",
   "ui.grain.year": "Yearly",
+  "ui.showing": "Showing",
+  "ui.all_time": "All history",
   "ui.display": "Display",
   "ui.display.grid": "Grid",
   "ui.display.chart": "Chart",

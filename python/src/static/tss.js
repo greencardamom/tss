@@ -45,8 +45,10 @@
 
   // CATALOG = pulldown GROUPS from /catalog: {id, house, source, label_key, metrics}.
   var CATALOG = [];
+  // offset = how many periods back from now (0 = current month/year). For day grain
+  // it shifts months, for month grain it shifts years; year grain ignores it.
   var state = { house: "activity", group: null, metrics: [], grain: "year",
-                display: "grid", wiki: "", summary: false };
+                display: "grid", wiki: "", summary: false, offset: 0 };
 
   // --- URL permalinks ------------------------------------------------------
   function readUrl() {
@@ -58,6 +60,7 @@
     if (p.get("display")) state.display = p.get("display");
     if (p.get("wiki")) state.wiki = p.get("wiki");
     if (p.get("summary")) state.summary = p.get("summary") === "1";
+    if (p.get("offset")) state.offset = parseInt(p.get("offset"), 10) || 0;
   }
   function writeUrl() {
     var p = new URLSearchParams();
@@ -68,6 +71,7 @@
     p.set("display", state.display);
     if (state.wiki) p.set("wiki", state.wiki);
     if (state.summary) p.set("summary", "1");
+    if (state.offset) p.set("offset", state.offset);
     if (TSS.lang && TSS.lang !== "en") p.set("lang", TSS.lang);
     history.replaceState(null, "", location.pathname + "?" + p.toString());
   }
@@ -154,7 +158,25 @@
       { v: "day", label: t("ui.grain.day") },
       { v: "month", label: t("ui.grain.month") },
       { v: "year", label: t("ui.grain.year") }
-    ], function (v) { state.grain = v; })));
+    ], function (v) { state.grain = v; state.offset = 0; renderControls(); })));
+
+    // Period navigator: day -> pick month, month -> pick year, year -> all history.
+    var pr = periodRange(state.grain, state.offset);
+    var nav = el("span", { "class": "pnav" });
+    if (state.grain === "year") {
+      nav.appendChild(el("span", { "class": "plabel", text: pr.label }));
+    } else {
+      nav.appendChild(el("button", { type: "button", "class": "navbtn",
+        on: { click: function () { state.offset -= 1; renderControls(); run(); } } }, "◀"));
+      nav.appendChild(el("span", { "class": "plabel", text: pr.label }));
+      var nextb = el("button", { type: "button", "class": "navbtn",
+        on: { click: function () {
+          if (state.offset < 0) { state.offset += 1; renderControls(); run(); }
+        } } }, "▶");
+      if (state.offset >= 0) nextb.disabled = true;   // never into the future
+      nav.appendChild(nextb);
+    }
+    f.appendChild(field("ui.showing", nav));
 
     // Display
     f.appendChild(field("ui.display", radioGroup("display", state.display, [
@@ -184,18 +206,24 @@
   //   day   -> this calendar month  (Total = month-to-date)
   //   month -> this calendar year   (Total = year-to-date)
   //   year  -> all history          (Total = all-time)
-  function rangeFor(grain) {
+  // offset shifts the window back: day grain -> by months, month grain -> by years
+  // (0 = current). Returns {from, to, label} where label names the period shown.
+  function periodRange(grain, offset) {
     var n = new Date();
     var iso = function (d) { return d.toISOString().slice(0, 10); };
-    if (grain === "day") {
-      return { from: iso(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1))),
-               to:   iso(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0))) };
+    var loc = TSS.lang || "en";
+    if (grain === "day") {                    // one calendar month
+      var y = n.getUTCFullYear(), m = n.getUTCMonth() + (offset || 0);
+      var from = new Date(Date.UTC(y, m, 1)), to = new Date(Date.UTC(y, m + 1, 0));
+      return { from: iso(from), to: iso(to),
+               label: from.toLocaleString(loc, { month: "long", year: "numeric",
+                                                  timeZone: "UTC" }) };
     }
-    if (grain === "month") {
-      return { from: iso(new Date(Date.UTC(n.getUTCFullYear(), 0, 1))),
-               to:   iso(new Date(Date.UTC(n.getUTCFullYear(), 11, 31))) };
+    if (grain === "month") {                  // one calendar year
+      var yr = n.getUTCFullYear() + (offset || 0);
+      return { from: yr + "-01-01", to: yr + "-12-31", label: String(yr) };
     }
-    return { from: null, to: null };   // year: all history
+    return { from: null, to: null, label: t("ui.all_time", "All history") };  // year
   }
 
   // --- run -----------------------------------------------------------------
@@ -208,7 +236,7 @@
     if (!grp || !state.metrics.length) { status.textContent = ""; return; }
     status.textContent = t("ui.loading");
 
-    var rg = rangeFor(state.grain);
+    var rg = periodRange(state.grain, state.offset);
     var qs = "&grain=" + state.grain +
       (rg.from ? "&from=" + rg.from : "") + (rg.to ? "&to=" + rg.to : "");
 
