@@ -181,7 +181,8 @@
     // Display
     f.appendChild(field("ui.display", radioGroup("display", state.display, [
       { v: "grid", label: t("ui.display.grid") },
-      { v: "chart", label: t("ui.display.chart") }
+      { v: "trend", label: t("ui.display.trend") },
+      { v: "ranking", label: t("ui.display.ranking") }
     ], function (v) { state.display = v; })));
 
     // Wiki filter + summary
@@ -253,7 +254,8 @@
         block.appendChild(head);
         var host = el("div", {});
         block.appendChild(host);
-        if (state.display === "chart") renderChart(host, g);
+        if (state.display === "trend") renderTrend(host, g);
+        else if (state.display === "ranking") renderRanking(host, g);
         else renderGrid(host, g, head);     // head: where the Show all/Collapse btn sits
         result.appendChild(block);
       });
@@ -361,34 +363,72 @@
     }
   }
 
-  // --- chart (uPlot): flow -> bars, gauge -> line; combined or one wiki -----
-  function renderChart(host, g) {
-    var isGauge = g.value_type === "gauge";
+  // --- charts --------------------------------------------------------------
+  var PALETTE = ["#3366cc", "#dc3912", "#109618", "#ff9900", "#990099",
+                 "#0099c6", "#dd4477", "#66aa00", "#b82e2e", "#316395"];
+
+  // Rank rows by total (flow) / latest reading (gauge); drop empties; top n.
+  function topRows(rows, valueType, n) {
+    var agg = (valueType === "gauge") ? lastVal : rowTotal;
+    return rows.map(function (r) {
+        return { entity: r.entity, values: r.values, v: agg(r.values) };
+      })
+      .filter(function (r) { return r.v != null; })
+      .sort(function (a, b) { return (b.v || 0) - (a.v || 0); })
+      .slice(0, n);
+  }
+
+  // #1 Trend: a line per series over time — top-N wikis, or the one filtered
+  // wiki, or the combined total (summary-only). Chronological x.
+  function renderTrend(host, g) {
     var xs = g.buckets.map(function (b) { return Date.parse(b + "T00:00:00Z") / 1000; });
-    var ser;
+    var lines = [];
     if (state.wiki) {
-      var row = g.rows.filter(function (r) { return wikiMatch(r.entity, state.wiki); })[0];
-      ser = row ? row.values : g.buckets.map(function () { return null; });
+      var r = g.rows.filter(function (x) { return wikiMatch(x.entity, state.wiki); })[0];
+      if (r) lines.push({ label: r.entity, values: r.values });
+    } else if (state.summary && g.all) {
+      lines.push({ label: t("ui.combined"), values: g.all });
     } else {
-      ser = g.all || g.buckets.map(function () { return null; });
+      topRows(g.rows, g.value_type, 8).forEach(function (r) {
+        lines.push({ label: r.entity, values: r.values });
+      });
     }
+    if (!lines.length && g.all) lines.push({ label: t("ui.combined"), values: g.all });
+
+    var data = [xs].concat(lines.map(function (l) { return l.values; }));
+    var series = [{}].concat(lines.map(function (l, i) {
+      return { label: l.label, stroke: PALETTE[i % PALETTE.length], width: 1.6,
+               points: { show: true, size: 4 } };
+    }));
     var w = host.clientWidth || (host.parentNode && host.parentNode.clientWidth) || 800;
-    var opts = {
-      width: w, height: 320,
-      scales: { x: { time: true } },
-      series: [{}, {
-        label: g.unit || g.metric,
-        stroke: "#36c",
-        fill: isGauge ? "rgba(51,102,204,0.12)" : "rgba(51,102,204,0.55)",
-        width: 2,
-        paths: isGauge ? undefined : uPlot.paths.bars({ size: [0.6, 60] }),
-        points: { show: isGauge }
-      }],
-    };
-    var u = new uPlot(opts, [xs, ser], host);
+    var u = new uPlot({ width: w, height: 340, scales: { x: { time: true } },
+                       series: series }, data, host);
     window.addEventListener("resize", function () {
-      u.setSize({ width: host.clientWidth || w, height: 320 });
+      u.setSize({ width: host.clientWidth || w, height: 340 });
     });
+  }
+
+  // #2 Ranking: top-N wikis for the shown period as horizontal bars (leaderboard).
+  function renderRanking(host, g) {
+    var base = state.wiki
+      ? g.rows.filter(function (r) { return wikiMatch(r.entity, state.wiki); })
+      : g.rows;
+    var top = topRows(base, g.value_type, 20);
+    if (!top.length) {
+      host.appendChild(el("div", { "class": "muted", text: t("ui.no_data") }));
+      return;
+    }
+    var max = top[0].v || 1;
+    var wrap = el("div", { "class": "ranking" });
+    top.forEach(function (r, i) {
+      var pct = Math.max(1, (r.v / max) * 100);
+      wrap.appendChild(el("div", { "class": "rankrow" },
+        el("span", { "class": "rankname", title: r.entity, text: r.entity }),
+        el("span", { "class": "rankbar" }, el("span", { "class": "rankfill",
+          style: "width:" + pct + "%;background:" + PALETTE[i % PALETTE.length] })),
+        el("span", { "class": "rankval", text: fmt(r.v) })));
+    });
+    host.appendChild(wrap);
   }
 
   function init() {
