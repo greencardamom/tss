@@ -329,7 +329,7 @@
     });
     table.appendChild(el("thead", {}, hr));
 
-    var LIMIT = 10;                        // collapse long tables to this many rows
+    var LIMIT = 6;                         // collapse long tables to this many rows
     var longTable = rows.length > LIMIT;
     var expanded = !!g._expanded;
     var shown = (longTable && !expanded) ? rows.slice(0, LIMIT) : rows;
