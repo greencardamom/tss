@@ -35,6 +35,13 @@
   function metLabel(srcSlug, m) {
     return t("metric." + srcSlug + "." + m.slug, m.label || m.slug);
   }
+  // Forgiving wiki match: sources name wikis differently (eventstreams "en",
+  // arcstat "en.wikipedia.org", numberofurl "en.wikipedia", iabotapi "enwiki").
+  // "en" matches all of those; an exact name also matches.
+  function wikiMatch(entity, w) {
+    var e = entity.toLowerCase(), q = w.toLowerCase();
+    return e === q || e === q + "wiki" || e.indexOf(q + ".") === 0;
+  }
 
   // CATALOG = pulldown GROUPS from /catalog: {id, house, source, label_key, metrics}.
   var CATALOG = [];
@@ -250,9 +257,15 @@
   function renderGrid(host, g) {
     host.innerHTML = "";
     var isGauge = g.value_type === "gauge";
-    var rows = state.wiki
-      ? g.rows.filter(function (r) { return r.entity === state.wiki; })
+    var filtering = !!state.wiki;
+    var rows = filtering
+      ? g.rows.filter(function (r) { return wikiMatch(r.entity, state.wiki); })
       : (state.summary ? [] : g.rows);
+
+    if (filtering && rows.length === 0) {
+      host.appendChild(el("div", { "class": "muted", text: t("ui.no_wiki_match") + " " + state.wiki }));
+      return;
+    }
 
     var table = el("table", { "class": "grid" });
     var hr = el("tr");
@@ -270,7 +283,7 @@
 
     var tb = el("tbody");
     rows.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge)); });
-    if (g.all) {
+    if (g.all && !filtering) {           // combined row only when not filtered to a wiki
       var gr = dataRow(t("ui.combined"), g.all, isGauge);
       gr.className = "grand";
       tb.appendChild(gr);
@@ -288,7 +301,7 @@
     var xs = g.buckets.map(function (b) { return Date.parse(b + "T00:00:00Z") / 1000; });
     var ser;
     if (state.wiki) {
-      var row = g.rows.filter(function (r) { return r.entity === state.wiki; })[0];
+      var row = g.rows.filter(function (r) { return wikiMatch(r.entity, state.wiki); })[0];
       ser = row ? row.values : g.buckets.map(function () { return null; });
     } else {
       ser = g.all || g.buckets.map(function () { return null; });
