@@ -289,12 +289,15 @@
     table.appendChild(el("thead", {}, hr));
 
     var tb = el("tbody");
-    rows.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge, order)); });
-    if (g.all && !filtering) {           // combined row only when not filtered to a wiki
+    function grandRow() {                  // the blue "All combined" total row
       var gr = dataRow(t("ui.combined"), g.all, isGauge, order);
       gr.className = "grand";
-      tb.appendChild(gr);
+      return gr;
     }
+    var showGrand = g.all && !filtering;   // only when not filtered to a single wiki
+    if (showGrand && rows.length > 10) tb.appendChild(grandRow());  // top copy on long tables
+    rows.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge, order)); });
+    if (showGrand) tb.appendChild(grandRow());                      // bottom copy (always)
     table.appendChild(tb);
 
     if (isGauge && g.metric.indexOf("uniq") === 0)
