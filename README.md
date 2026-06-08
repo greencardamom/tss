@@ -302,10 +302,12 @@ rsync -rt --prune-empty-dirs --include='*/' --include='iabget.done' --exclude='*
 toolforge jobs run rebuild-medic --image python3.11 --mount all --wait \
   --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py medic_iabotdb'
 ```
-Ongoing: the `sync_medic_iabotdb.sh` acre cron (above) rsyncs new files from rabbit
-and ingests newly-completed projects (the per-project done-set in
-`~/.tss_medic_iabotdb.state` skips the rest). Not freshness-monitored (sporadic
-manual batches would false-alarm).
+Ongoing: the `sync_medic_iabotdb.sh` acre cron (above) pulls a fresh copy from
+rabbit (~1 min), ingests newly-completed projects (the per-project done-set in
+`~/.tss_medic_iabotdb.state` — kept off /beater — skips the rest), and removes its
+`/beater` scratch dir on exit so nothing stale is left behind. Not
+freshness-monitored (sporadic manual batches would false-alarm). After a manual
+backfill, `rm -rf /beater/medic_metaimp` when done (or just let the next sync clear it).
 
 ---
 
