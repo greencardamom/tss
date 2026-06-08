@@ -1,0 +1,7 @@
+{
+  "_doc": "Optional pulldown groupings. A source listed here is split into named groups (each a metric subset); sources NOT listed default to one group = the whole source. Keys: id (stable), label_key (en.json), and one of categories[] (include only these) or exclude_categories[] (everything but these); optional include_metrics[] adds specific slugs regardless of category. Pure config — regrouping needs no code change.",
+  "arcstat": [
+    { "id": "arcstat_links", "label_key": "source.arcstat", "exclude_categories": ["Media"] },
+    { "id": "arcstat_media", "label_key": "group.arcstat_media", "categories": ["Media"] }
+  ]
+}

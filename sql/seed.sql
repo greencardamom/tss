@@ -252,7 +252,7 @@ INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, categ
     (@arc, 'altarchive_links',   'Alt-archive links',                  'links', 'gauge', 'last', 'Links'),
     (@arc, 'archiveis_links',    'Archive.is links',                   'links', 'gauge', 'last', 'Links'),
     (@arc, 'webcite_links',      'WebCite links',                      'links', 'gauge', 'last', 'Links'),
-    (@arc, 'googlebooks_links',  'Google Books links (cite w/ ISBN)',  'links', 'gauge', 'last', 'Links'),
+    (@arc, 'googlebooks_links',  'Google Books links (cite w/ ISBN)',  'links', 'gauge', 'last', 'Media'),
     (@arc, 'pages_wayback',      'Pages with >=1 Wayback link',        'pages', 'gauge', 'last', 'Pages with'),
     (@arc, 'pages_altarchive',   'Pages with >=1 alt-archive link',    'pages', 'gauge', 'last', 'Pages with'),
     (@arc, 'pages_archiveis',    'Pages with >=1 Archive.is link',     'pages', 'gauge', 'last', 'Pages with'),
