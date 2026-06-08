@@ -28,6 +28,12 @@ def _group_overrides():
 
 
 def _filter_metrics(metrics, gdef):
+    explicit = gdef.get("metrics")
+    if explicit is not None:                       # exactly these slugs, in this order
+        order = {s: i for i, s in enumerate(explicit)}
+        sub = [m for m in metrics if m["slug"] in order]
+        sub.sort(key=lambda m: order[m["slug"]])
+        return sub
     cats = gdef.get("categories")
     excl = set(gdef.get("exclude_categories") or [])
     inc = set(gdef.get("include_metrics") or [])
