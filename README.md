@@ -375,12 +375,17 @@ medic's `iabget.done` logs live on host **rabbit** (local disk; `sheep` is a VM 
 rabbit and reaches them via a slow shared-folder NFS — do NOT stream through sheep).
 The logs total ~1.9 GB / ~4.8M lines, so always work from a **local copy** on acre.
 
+**Dating is by RUN DATE, per project:** each project's events bucket to the mtime of
+its `iabget.orig` (else `iabget.done`) — when the work *ran* — NOT the project-name
+(IMPID) date, which is just when the import was created (often months earlier). So
+the rsync must copy `iabget.orig` too.
+
 Backfill (one-time), run on acre:
 ```bash
-# copy iabget.done from rabbit's local disk (fast)
+# copy iabget.done + iabget.orig from rabbit's local disk (fast)
 mkdir -p /beater/medic_metaimp
-rsync -rt --prune-empty-dirs --include='*/' --include='iabget.done' --exclude='*' \
-  rabbit:/home/greenc/sharedNFS/medic/metaimp/ /beater/medic_metaimp/
+rsync -rt --prune-empty-dirs --include='*/' --include='iabget.done' --include='iabget.orig' \
+  --exclude='*' rabbit:/home/greenc/sharedNFS/medic/metaimp/ /beater/medic_metaimp/
 # ALWAYS dry-run first (parse + breakdown, no upload, no state) — verify, then hot-run
 ./loaders/pull_medic_iabotdb.py --dry-run  --local-dir /beater/medic_metaimp
 ./loaders/pull_medic_iabotdb.py --backfill --local-dir /beater/medic_metaimp   # ~10 min
