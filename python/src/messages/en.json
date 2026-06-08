@@ -25,6 +25,8 @@
   "ui.all_wikis": "All wikis",
   "ui.combined": "All combined",
   "ui.total": "Total",
+  "ui.expand": "Show all",
+  "ui.collapse": "Collapse",
   "ui.site": "Wiki",
   "ui.language": "Language",
   "ui.uniq_caveat": "Combined total of a “unique” metric is a sum of per-wiki uniques (an upper bound), not a global de-duplicated count.",

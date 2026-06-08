@@ -324,6 +324,11 @@
     });
     table.appendChild(el("thead", {}, hr));
 
+    var LIMIT = 10;                        // collapse long tables to this many rows
+    var longTable = rows.length > LIMIT;
+    var expanded = !!g._expanded;
+    var shown = (longTable && !expanded) ? rows.slice(0, LIMIT) : rows;
+
     var tb = el("tbody");
     function grandRow() {                  // the blue "All combined" total row
       var gr = dataRow(t("ui.combined"), g.all, isGauge, order);
@@ -331,14 +336,21 @@
       return gr;
     }
     var showGrand = g.all && !filtering;   // only when not filtered to a single wiki
-    if (showGrand && rows.length > 10) tb.appendChild(grandRow());  // top copy on long tables
-    rows.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge, order)); });
-    if (showGrand) tb.appendChild(grandRow());                      // bottom copy (always)
+    if (showGrand && longTable) tb.appendChild(grandRow());   // top copy on long tables
+    shown.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge, order)); });
+    if (showGrand) tb.appendChild(grandRow());                // bottom copy (always)
     table.appendChild(tb);
 
     if (isGauge && g.metric.indexOf("uniq") === 0)
       host.appendChild(el("div", { "class": "caveat", text: t("ui.uniq_caveat") }));
     host.appendChild(el("div", { "class": "tablewrap" }, table));
+    if (longTable) {
+      host.appendChild(el("button", { "class": "expand", on: { click: function () {
+        g._expanded = !expanded; renderGrid(host, g);
+      } } }, expanded
+        ? t("ui.collapse")
+        : t("ui.expand") + " (" + fmt(rows.length) + ")"));
+    }
   }
 
   // --- chart (uPlot): flow -> bars, gauge -> line; combined or one wiki -----
