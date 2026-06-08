@@ -179,11 +179,13 @@
   }
 
   // --- date range defaults per grain ---------------------------------------
+  // Month + year show ALL history (every period with data). Only DAY is windowed
+  // (a recent slice), since daily x hundreds of wikis x years would be enormous;
+  // narrow with the wiki filter to go deeper on days.
   function rangeFor(grain) {
+    if (grain !== "day") return { from: null, to: null };
     var to = new Date(), from = new Date();
-    if (grain === "day") from.setDate(to.getDate() - 120);
-    else if (grain === "month") from.setMonth(to.getMonth() - 36);
-    else return { from: null, to: null };            // year: all of it
+    from.setDate(to.getDate() - 120);
     var iso = function (d) { return d.toISOString().slice(0, 10); };
     return { from: iso(from), to: iso(to) };
   }
