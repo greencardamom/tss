@@ -270,3 +270,64 @@ ON DUPLICATE KEY UPDATE
     value_type  = VALUES(value_type),
     default_agg = VALUES(default_agg),
     category    = VALUES(category);
+
+
+-- ----------------------------------------------------------------------------
+-- Source: numberofurl  (external-URL inventory across ALL Wikimedia wikis; gauge).
+--   Sibling of arcstat: per-site LEVELS (value_type='gauge', default_agg='last'),
+--   but more wikis (~850), shorter history (first reliable snapshot 2025-10-18,
+--   then monthly on the 15th), no book/media — instead total/unique/pages-with
+--   triples for all-external / Internet-Archive / Wayback / Archive.today / WebCite.
+--   Source data is the Commons tabular page Data:Wikipedia_statistics/exturls.tab
+--   (a JSON object), regenerated every ~30 days by the numberofurl bot on acre;
+--   the loader backfills from the page's Commons REVISIONS and goes forward from
+--   acre's local datau.tab. Metric slugs == the .tab schema field names. The
+--   total.* aggregate rows are skipped (TSS computes the combined total itself).
+--   Same gauge rule as arcstat: load deferred + rebuild (NOT live recompute).
+--
+--   CAVEAT on the 5 uniq* metrics: per-site values are unique-WITHIN-that-wiki
+--   (correct). The combined _all (sum of per-site lasts) is therefore "sum of
+--   per-wiki uniques", an OVERCOUNT vs true cross-wiki unique (~+40%: the same
+--   URL recurs on many wikis). True global-dedup uniques exist only in the file's
+--   total.all row and are NOT loaded -- computing them across wikis is expensive
+--   and out of scope here. So read uniq* per-site; treat their _all as an upper
+--   bound. The 11 non-uniq metrics aggregate cleanly (their _all == total.all).
+-- ----------------------------------------------------------------------------
+INSERT INTO source (slug, name, description, ref_url_tpl)
+VALUES (
+    'numberofurl',
+    'External URL counts',
+    'Inventory of external + web-archive URLs across all Wikimedia wikis (per-site snapshots: total/unique/pages-with for all-external, Internet Archive, Wayback, Archive.today, WebCite); monthly since Oct 2025.',
+    NULL
+)
+ON DUPLICATE KEY UPDATE
+    name        = VALUES(name),
+    description = VALUES(description),
+    ref_url_tpl = VALUES(ref_url_tpl);
+
+SET @nou = (SELECT source_id FROM source WHERE slug = 'numberofurl');
+
+-- All gauge / 'last'. Slugs are the exutil.tab schema field names verbatim.
+INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, category) VALUES
+    (@nou, 'pages',                 'Content pages on the wiki',          'pages', 'gauge', 'last', 'Coverage'),
+    (@nou, 'urls',                  'External URLs',                      'urls',  'gauge', 'last', 'All external'),
+    (@nou, 'uniqurls',              'External URLs (unique per wiki)',             'urls',  'gauge', 'last', 'All external'),
+    (@nou, 'pagesurls',             'Pages with external URLs',           'pages', 'gauge', 'last', 'All external'),
+    (@nou, 'ialiburls',             'Internet Archive URLs',              'urls',  'gauge', 'last', 'Internet Archive'),
+    (@nou, 'uniqialiburls',         'Internet Archive URLs (unique per wiki)',     'urls',  'gauge', 'last', 'Internet Archive'),
+    (@nou, 'pagesialiburls',        'Pages with Internet Archive URLs',   'pages', 'gauge', 'last', 'Internet Archive'),
+    (@nou, 'waybackurls',           'Wayback URLs',                       'urls',  'gauge', 'last', 'Wayback'),
+    (@nou, 'uniqwaybackurls',       'Wayback URLs (unique per wiki)',              'urls',  'gauge', 'last', 'Wayback'),
+    (@nou, 'pageswaybackurls',      'Pages with Wayback URLs',            'pages', 'gauge', 'last', 'Wayback'),
+    (@nou, 'archivetodayurls',      'Archive.today URLs',                 'urls',  'gauge', 'last', 'Archive.today'),
+    (@nou, 'uniqarchivetodayurls',  'Archive.today URLs (unique per wiki)',        'urls',  'gauge', 'last', 'Archive.today'),
+    (@nou, 'pagesarchivetodayurls', 'Pages with Archive.today URLs',      'pages', 'gauge', 'last', 'Archive.today'),
+    (@nou, 'webciteurls',           'WebCite URLs',                       'urls',  'gauge', 'last', 'WebCite'),
+    (@nou, 'uniqwebciteurls',       'WebCite URLs (unique per wiki)',              'urls',  'gauge', 'last', 'WebCite'),
+    (@nou, 'pageswebciteurls',      'Pages with WebCite URLs',            'pages', 'gauge', 'last', 'WebCite')
+ON DUPLICATE KEY UPDATE
+    label       = VALUES(label),
+    unit        = VALUES(unit),
+    value_type  = VALUES(value_type),
+    default_agg = VALUES(default_agg),
+    category    = VALUES(category);

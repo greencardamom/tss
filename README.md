@@ -25,6 +25,11 @@ Sources are named after the API/service the data comes from:
   wayback/alt-archive/archive.is/webcite links, pages-with-each, and archive.org media
   items each Wikipedia holds. The first **gauge** source (levels, not work-per-period),
   from `quepasa:~/toolforge/arcstat/db/master.db` (per-wiki; 2019→).
+- **numberofurl** — external-URL *inventory* across **all** Wikimedia wikis (~850):
+  per-site total/unique/pages-with for all-external, Internet Archive, Wayback,
+  Archive.today, WebCite. Also a **gauge**, read from the Commons tabular page
+  `Data:Wikipedia_statistics/exturls.tab` (revisions backfill + acre's local
+  `datau.tab` going forward); monthly since Oct 2025.
 
 ---
 
@@ -102,6 +107,10 @@ loaders/                  (clients/adapters; stdlib only)
                           (no file transfer), dry-run + --since-days, checkpointed
   pull_arcstat.py         archive-URL inventory (GAUGE) from quepasa's master.db:
                           posts deferred + triggers gauge rebuild; dry-run
+  pull_numberofurl.py     external-URL inventory (GAUGE) from the Commons .tab page:
+                          revisions backfill + local datau.tab forward; dry-run
+  tss_wiki.py             MediaWiki API reads for loaders (WMF good citizen): policy
+                          User-Agent + escalating maxlag (ported from bup's wiki.py)
 tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
 ```
 
@@ -258,6 +267,7 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 | `30 3 * * *` | `/home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1` | rsync new iabget.done from rabbit's local disk + ingest newly-completed medic projects. |
 | `45 3 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1` | Compute enwiki-repair stats on rabbit for projects finished in the last 60 days + ingest newly-finished ones. |
 | `30 4 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1` | Daily: re-post arcstat inventory from quepasa's master.db (deferred) + trigger gauge rebuild. Sites update on their own cron throughout the day, often 1+/day. |
+| `0 5 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_numberofurl.py >> /home/greenc/numberofurl.log 2>&1` | Daily check: load the new monthly Commons snapshot from acre's `datau.tab` (no-op if that snapshot date is already loaded) + gauge rebuild. |
 
 ```cron
 # TSS uploader — drain new eventstreams rows to TSS, 5 min after each cron-run cycle
@@ -268,6 +278,8 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 45 3 * * * /home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1
 # arcstat archive-URL inventory (gauge) daily sync (quepasa master.db -> TSS)
 30 4 * * * /home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1
+# numberofurl external-URL inventory (gauge) daily check (Commons .tab -> TSS)
+0 5 * * * /home/greenc/repos/gh/tss/loaders/pull_numberofurl.py >> /home/greenc/numberofurl.log 2>&1
 ```
 (On acre the live crontab uses tcsh redirect `>>&`; the lines above are shown in
 bash syntax for portability.)
@@ -424,6 +436,43 @@ toolforge jobs run rebuild-arcstat --image python3.11 --mount all --wait \
 Ongoing: the daily acre cron (above) runs `pull_arcstat.py` with no flags — post
 (deferred) then trigger the gauge rebuild via the API. Not freshness-monitored.
 
+### numberofurl (gauge, from Commons)
+
+External-URL **inventory** across ~850 Wikimedia wikis — a gauge like arcstat, but the
+data is a Commons **tabular** page, `Data:Wikipedia_statistics/exturls.tab` (a JSON
+object: `schema.fields` + `data` rows), regenerated ~monthly (the 15th) by the
+numberofurl bot on acre, which also drops a local copy at
+`~/toolforge/numberofurl/datau.tab`. Metric slugs are the `.tab` field names verbatim.
+There's no per-row date — a snapshot's date comes from the `.tab` description
+("Last update: …") for the local file, or the revision timestamp when backfilling.
+The `total.*` rows are aggregates and are **skipped** (TSS computes `_all`).
+
+Reads of a *main* WMF API (commons.wikimedia.org) require a policy User-Agent or you
+get HTTP 403 — handled by `loaders/tss_wiki.py` (policy UA + escalating `maxlag`,
+ported from bup's `wiki.py`). The Cloud services (iabot/booksup) don't need this.
+
+**uniq\* caveat (5 metrics).** Per-site `uniq*` = unique-within-that-wiki (correct).
+But unique counts **don't sum across wikis** (the same URL recurs on many), so the
+combined `_all` for `uniq*` is a *sum of per-wiki uniques* — an overcount (~+40%) vs
+true global-dedup. The real global uniques live only in the page's `total.all` row and
+are deliberately **not** loaded (too expensive to compute cross-wiki; out of scope).
+Read `uniq*` per-site; treat their `_all` as an upper bound. The other 11 metrics
+aggregate cleanly (`_all` == the file's `total.all`).
+
+Backfill (one-time), on acre — history is the Commons page's revisions, gated to the
+first reliable snapshot (2025-10-18; earlier revisions are setup churn):
+```bash
+cd /home/greenc/repos/gh/tss
+./loaders/pull_numberofurl.py --backfill --dry-run    # lists snapshots + parse check
+./loaders/pull_numberofurl.py --backfill --no-rebuild # post all snapshots (deferred)
+toolforge jobs run rebuild-numberofurl --image python3.11 --mount all --wait \
+  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py numberofurl'
+```
+Ongoing: the daily acre cron runs `pull_numberofurl.py` (no flags) — reads the local
+`datau.tab`, and if its snapshot date isn't already in `~/.tss_numberofurl.state`,
+posts it (deferred) + triggers the gauge rebuild. So the daily run is a cheap no-op
+until the monthly file changes. Not freshness-monitored.
+
 ---
 
 ## Operations
@@ -452,8 +501,9 @@ records byte offsets in `~/.tss_outbox_iabw.state`.
 **Tokens:** plaintext lives only in `~/.tss_token` (eventstreams; on both the tss
 tool and acre), `~/.tss_token_booksup` (booksup; tss tool), `~/.tss_token_iabotapi`
 (iabotapi; tss tool), `~/.tss_token_medic_iabotdb` / `~/.tss_token_medic_enwiki`
-(the medic sources; on acre), and `~/.tss_token_arcstat` (arcstat; on acre), mode
-600, never in git. Only the SHA-256 hash is in the DB.
+(the medic sources; on acre), `~/.tss_token_arcstat` (arcstat; on acre), and
+`~/.tss_token_numberofurl` (numberofurl; on acre), mode 600, never in git. Only the
+SHA-256 hash is in the DB.
 
 ---
 
