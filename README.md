@@ -21,6 +21,10 @@ Sources are named after the API/service the data comes from:
 - **medic_enwiki** — WaybackMedic's dead-link repairs on English Wikipedia (links
   moved to new URLs, archive URLs added, url-status flips, pages edited), computed
   from each `meta/<name>.<range>/` project's logs on host `rabbit` (global; 2015→).
+- **arcstat** — archive-URL *inventory* across wikis: per-site snapshots of how many
+  wayback/alt-archive/archive.is/webcite links, pages-with-each, and archive.org media
+  items each Wikipedia holds. The first **gauge** source (levels, not work-per-period),
+  from `quepasa:~/toolforge/arcstat/db/master.db` (per-wiki; 2019→).
 
 ---
 
@@ -96,6 +100,8 @@ loaders/                  (clients/adapters; stdlib only)
   sync_medic_iabotdb.sh   acre cron: rsync iabget.done from rabbit + ingest new projects
   pull_medic_enwiki.py    WaybackMedic enwiki-repair stats: remote-ssh compute on rabbit
                           (no file transfer), dry-run + --since-days, checkpointed
+  pull_arcstat.py         archive-URL inventory (GAUGE) from quepasa's master.db:
+                          posts deferred + triggers gauge rebuild; dry-run
 tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
 ```
 
@@ -116,6 +122,15 @@ Four tables (`sql/schema.sql`):
   total). `samples` distinguishes a real zero from "no data".
 
 Resolution is Day / Month / Year only (no sub-daily).
+
+**Flows vs gauges.** A metric's `default_agg` decides how it consolidates when rolling
+up over time. Most sources are **flows** (`sum`) — work done per period, additive
+(links added, pages edited). `arcstat` is a **gauge** (`last`) — an inventory *level*
+("as of date D, site X holds N links"), so across time the rollup keeps the **last**
+reading of the period, and the combined `_all` total **sums** each entity's last reading.
+Only the set-based `rebuild_source` implements gauges (window functions); the live
+per-write `recompute()` is sum-only, so gauge sources load via `?rollup=defer` + rebuild.
+avg/max/min/counter aren't implemented yet (`rebuild_source` raises if it sees one).
 
 ---
 
@@ -242,6 +257,7 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 | `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1` | Tail new eventstreams rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
 | `30 3 * * *` | `/home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1` | rsync new iabget.done from rabbit's local disk + ingest newly-completed medic projects. |
 | `45 3 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1` | Compute enwiki-repair stats on rabbit for projects finished in the last 60 days + ingest newly-finished ones. |
+| `30 4 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1` | Daily: re-post arcstat inventory from quepasa's master.db (deferred) + trigger gauge rebuild. Sites update on their own cron throughout the day, often 1+/day. |
 
 ```cron
 # TSS uploader — drain new eventstreams rows to TSS, 5 min after each cron-run cycle
@@ -250,7 +266,11 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1
 # WaybackMedic enwiki-repair daily sync (remote compute on rabbit -> TSS)
 45 3 * * * /home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1
+# arcstat archive-URL inventory (gauge) daily sync (quepasa master.db -> TSS)
+30 4 * * * /home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1
 ```
+(On acre the live crontab uses tcsh redirect `>>&`; the lines above are shown in
+bash syntax for portability.)
 The uploader holds a PID lockfile so runs never overlap.
 
 ### Toolforge — scheduled jobs (`toolforge jobs run`, as the `tss` tool)
@@ -365,6 +385,45 @@ recently-finished projects and posts the new ones (per-project done-set in
 and checkpointed, so a crash/re-run re-reads the fast stream and re-sends nothing.
 Not freshness-monitored (sporadic manual batches would false-alarm).
 
+### arcstat (the gauge source)
+
+Archive-URL **inventory** (levels, not work-per-period): one line per `(site, reading)`
+in `quepasa:~/toolforge/arcstat/db/master.db` —
+`<site> <YYYYMMDD> <content_pages> <v1|…|v16>`. The 16 pipe positions map (in order) to
+`wayback_links, pages_wayback, altarchive_links, pages_altarchive, archiveis_links,
+pages_archiveis, webcite_links, pages_webcite, googlebooks_links, media_texts,
+media_audio, media_movies, media_image, media_other, media_texts_paged, media_dark`;
+the leading count is `content_pages`. **Presence = data:** older rows have only 15
+positions (field 16 `media_dark` was added later) → no `media_dark` event for those,
+not a 0. Truncated lines (<15 positions) are skipped + reported.
+
+**Gauge handling — the one thing that's different from every other source.** These are
+`value_type=gauge, default_agg=last`. Two aggregation axes:
+- across **time** (day→month→year): the **last** reading in the period (never sum — a
+  level summed over months is nonsense);
+- across **wikis** (the `_all` total): **sum** of each wiki's last reading.
+
+Only `rebuild_source` honors this (`rollup._rebuild_last`, MariaDB window functions);
+the live per-write `recompute()` path is **sum-only**. So gauge sources MUST post with
+`?rollup=defer` and then rebuild — which `pull_arcstat.py` does automatically. (For an
+all-`sum` source the rebuild SQL is byte-identical to the pre-gauge engine, so existing
+sources are unaffected — verified by rebuild-and-compare.)
+
+master.db is tiny (~4k lines), so there's **no checkpoint**: each run re-posts every
+line (idempotent via `ext_key = <site>:<date>:<metric>`) and rebuilds the whole source.
+
+Load (on acre) — dry-run prints a per-metric summary incl. "current inventory" (sum of
+each site's latest reading) to eyeball against the dashboard totals:
+```bash
+cd /home/greenc/repos/gh/tss
+./loaders/pull_arcstat.py --dry-run                 # parse + summary, no upload
+./loaders/pull_arcstat.py --no-rebuild              # post (deferred); rebuild via the job:
+toolforge jobs run rebuild-arcstat --image python3.11 --mount all --wait \
+  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py arcstat'
+```
+Ongoing: the daily acre cron (above) runs `pull_arcstat.py` with no flags — post
+(deferred) then trigger the gauge rebuild via the API. Not freshness-monitored.
+
 ---
 
 ## Operations
@@ -392,9 +451,9 @@ records byte offsets in `~/.tss_outbox_iabw.state`.
 
 **Tokens:** plaintext lives only in `~/.tss_token` (eventstreams; on both the tss
 tool and acre), `~/.tss_token_booksup` (booksup; tss tool), `~/.tss_token_iabotapi`
-(iabotapi; tss tool), and `~/.tss_token_medic_iabotdb` / `~/.tss_token_medic_enwiki`
-(the medic sources; on acre), mode 600, never in git. Only the SHA-256 hash is in
-the DB.
+(iabotapi; tss tool), `~/.tss_token_medic_iabotdb` / `~/.tss_token_medic_enwiki`
+(the medic sources; on acre), and `~/.tss_token_arcstat` (arcstat; on acre), mode
+600, never in git. Only the SHA-256 hash is in the DB.
 
 ---
 
