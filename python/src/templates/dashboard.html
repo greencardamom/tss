@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ catalog.get('ui.title', 'Tarb Stats Server') }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='uPlot.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='tss.css') }}">
+  <script>
+    // Bootstrap: API base, chosen locale + available locales, and the merged
+    // message catalog for this locale (en overlaid by ?lang). All display text
+    // is resolved from here by t() in tss.js -- no strings hard-coded in JS.
+    window.TSS = {
+      apiBase: "/api/v1",
+      lang: {{ lang|tojson }},
+      langs: {{ langs|tojson }},
+      i18n: {{ catalog|tojson }}
+    };
+  </script>
+</head>
+<body>
+  <header id="masthead">
+    <h1 id="title"></h1>
+    <div id="subtitle" class="muted"></div>
+    <div id="langbar"></div>
+  </header>
+
+  <main>
+    <form id="controls" onsubmit="return false;"></form>
+    <div id="status" class="muted"></div>
+    <div id="result"></div>
+  </main>
+
+  <script src="{{ url_for('static', filename='uPlot.iife.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='tss.js') }}"></script>
+</body>
+</html>
