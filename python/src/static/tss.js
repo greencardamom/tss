@@ -179,15 +179,23 @@
   }
 
   // --- date range defaults per grain ---------------------------------------
-  // Month + year show ALL history (every period with data). Only DAY is windowed
-  // (a recent slice), since daily x hundreds of wikis x years would be enormous;
-  // narrow with the wiki filter to go deeper on days.
+  // Each grain is scoped to its current CONTAINING period, so the Total column is
+  // meaningful (not an arbitrary rolling-window sum):
+  //   day   -> this calendar month  (Total = month-to-date)
+  //   month -> this calendar year   (Total = year-to-date)
+  //   year  -> all history          (Total = all-time)
   function rangeFor(grain) {
-    if (grain !== "day") return { from: null, to: null };
-    var to = new Date(), from = new Date();
-    from.setDate(to.getDate() - 120);
+    var n = new Date();
     var iso = function (d) { return d.toISOString().slice(0, 10); };
-    return { from: iso(from), to: iso(to) };
+    if (grain === "day") {
+      return { from: iso(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1))),
+               to:   iso(new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0))) };
+    }
+    if (grain === "month") {
+      return { from: iso(new Date(Date.UTC(n.getUTCFullYear(), 0, 1))),
+               to:   iso(new Date(Date.UTC(n.getUTCFullYear(), 11, 31))) };
+    }
+    return { from: null, to: null };   // year: all history
   }
 
   // --- run -----------------------------------------------------------------
