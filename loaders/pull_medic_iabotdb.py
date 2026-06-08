@@ -5,8 +5,9 @@ Runs on ACRE; pulls medic's iabget.done logs from `sheep` over ssh and turns eac
 logged IABot-DB update into TSS events. Global (no entity); daily buckets by the
 project-name date embedded in each line's IMPID.
 
-Per iabget.done line (one update) -> TWO events:
-  archive op : archive_add | archive_modify | archive_delete | status_only
+Per iabget.done line (one update) -> one archive-op event, PLUS a status event
+ONLY when the line includes livestateselect (most lines don't):
+  archive op : archive_add | archive_modify | archive_delete | archive_unchanged
   status set : set_dead(0) set_alive(3) set_paywall(5) set_permadead(6) set_permalive(7)
 Lines that aren't `-a modifyurl`, or won't parse, are TRAPPED (logged + non-zero
 exit) so odd historic formats surface instead of being silently dropped.
@@ -97,23 +98,29 @@ def parse_line(line):
         if "=" in kv:
             k, v = kv.split("=", 1)
             params[k] = v
-    status = STATUS_MAP.get(params.get("livestateselect", ""))
-    if status is None:
-        return [], None, False  # unknown/absent status code -> trap
-
+    # Archive op: ALWAYS emitted, classified by STRUCTURE (the reason text is
+    # unreliable). Empty archiveurl in an md project sets the DB archive to
+    # (none) = delete (confirmed against IABot's own change log).
     archiveurl = params.get("archiveurl", "")
     if archiveurl == "":
-        op = "archive_delete" if proj_type == "md" else "status_only"
+        op = "archive_delete" if proj_type == "md" else "archive_unchanged"
     elif proj_type == "a":
         op = "archive_add"
     else:  # md, archive present
-        op = "status_only" if archiveurl == old_o else "archive_modify"
+        op = "archive_unchanged" if archiveurl == old_o else "archive_modify"
 
     project_dir = impid.rsplit(".", 1)[0]  # strip trailing .<urlid> -> dir basename
-    events = [
-        {"metric": op, "ts": ts, "value": 1, "ext_key": f"{impid}:{op}"},
-        {"metric": status, "ts": ts, "value": 1, "ext_key": f"{impid}:{status}"},
-    ]
+    events = [{"metric": op, "ts": ts, "value": 1, "ext_key": f"{impid}:{op}"}]
+
+    # Status change is OPTIONAL — most lines only touch the archive, no status.
+    ls = params.get("livestateselect", "")
+    if ls:
+        status = STATUS_MAP.get(ls)
+        if status is None:
+            return [], None, False  # present but unknown code -> trap (surface)
+        events.append({"metric": status, "ts": ts, "value": 1,
+                       "ext_key": f"{impid}:{status}"})
+
     return events, project_dir, True
 
 

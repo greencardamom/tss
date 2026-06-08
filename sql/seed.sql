@@ -158,7 +158,7 @@ INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, categ
     (@med, 'archive_add',    'Archives added',       'urls', 'count', 'sum', 'Archive'),
     (@med, 'archive_modify', 'Archives modified',    'urls', 'count', 'sum', 'Archive'),
     (@med, 'archive_delete', 'Archives deleted',     'urls', 'count', 'sum', 'Archive'),
-    (@med, 'status_only',    'Status-only changes',  'urls', 'count', 'sum', 'Archive'),
+    (@med, 'archive_unchanged', 'Archive unchanged',  'urls', 'count', 'sum', 'Archive'),
     (@med, 'set_dead',       'Set dead',             'urls', 'count', 'sum', 'Status'),
     (@med, 'set_alive',      'Set alive',            'urls', 'count', 'sum', 'Status'),
     (@med, 'set_paywall',    'Set paywall',          'urls', 'count', 'sum', 'Status'),
