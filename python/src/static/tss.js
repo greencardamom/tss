@@ -242,12 +242,12 @@
     if (v == null) return el("td", { "class": "num nodata", title: t("ui.no_data") }, "·");
     return el("td", { "class": "num" }, fmt(v));
   }
-  function dataRow(name, vals, isGauge) {
+  function dataRow(name, vals, isGauge, order) {
     var tr = el("tr");
     tr.appendChild(el("th", { "class": "site", text: name }));
-    vals.forEach(function (v) { tr.appendChild(cell(v)); });
-    tr.appendChild(el("td", { "class": "num total" },
+    tr.appendChild(el("td", { "class": "num total" },   // total/latest FIRST
       fmt(isGauge ? lastVal(vals) : rowTotal(vals))));
+    order.forEach(function (i) { tr.appendChild(cell(vals[i])); });
     return tr;
   }
   function applySort(g) {
@@ -272,24 +272,26 @@
       return;
     }
 
+    // Column order: Total/Latest first, then periods NEWEST -> oldest.
+    var order = g.buckets.map(function (_b, i) { return i; }).reverse();
     var table = el("table", { "class": "grid" });
     var hr = el("tr");
     hr.appendChild(el("th", { "class": "site", text: t("ui.site") }));
-    g.buckets.forEach(function (b, ci) {
-      hr.appendChild(el("th", { "class": "num sortable",
-        on: { click: function () {
-          g._sort = { col: ci, dir: (g._sort && g._sort.col === ci && g._sort.dir === -1) ? 1 : -1 };
-          applySort(g); renderGrid(host, g);
-        } }, text: bucketLabel(b, g.grain) }));
-    });
     hr.appendChild(el("th", { "class": "num total",
       text: isGauge ? t("ui.latest", "Latest") : t("ui.total") }));
+    order.forEach(function (i) {
+      hr.appendChild(el("th", { "class": "num sortable",
+        on: { click: function () {
+          g._sort = { col: i, dir: (g._sort && g._sort.col === i && g._sort.dir === -1) ? 1 : -1 };
+          applySort(g); renderGrid(host, g);
+        } }, text: bucketLabel(g.buckets[i], g.grain) }));
+    });
     table.appendChild(el("thead", {}, hr));
 
     var tb = el("tbody");
-    rows.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge)); });
+    rows.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge, order)); });
     if (g.all && !filtering) {           // combined row only when not filtered to a wiki
-      var gr = dataRow(t("ui.combined"), g.all, isGauge);
+      var gr = dataRow(t("ui.combined"), g.all, isGauge, order);
       gr.className = "grand";
       tb.appendChild(gr);
     }
