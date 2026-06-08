@@ -103,7 +103,12 @@
 
     // Source (within house)
     var srcs = sourcesIn(state.house);
-    if (!state.source && srcs.length) state.source = srcs[0].slug;
+    var have = srcs.some(function (s) { return s.slug === state.source; });
+    if ((!state.source || !have) && srcs.length) {
+      var prefer = state.house === "activity" ? "eventstreams" : "arcstat";
+      var p = srcs.filter(function (s) { return s.slug === prefer; })[0];
+      state.source = (p || srcs[0]).slug;
+    }
     var sel = el("select", { on: { change: function (e) {
       state.source = e.target.value; state.metrics = []; renderControls();
     } } });
