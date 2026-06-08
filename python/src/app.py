@@ -15,6 +15,7 @@ from flask import Flask, jsonify
 from db import close_db
 from api.read import bp as read_bp
 from api.write import bp as write_bp
+from web import bp as web_bp
 
 API_PREFIX = "/api/v1"
 
@@ -25,9 +26,10 @@ def create_app():
 
     app.register_blueprint(read_bp, url_prefix=API_PREFIX)
     app.register_blueprint(write_bp, url_prefix=API_PREFIX)
+    app.register_blueprint(web_bp)            # dashboard at "/"
 
-    @app.get("/")
-    def index():
+    @app.get(f"{API_PREFIX}")
+    def api_index():
         return jsonify(service="Tarb Stats Server", api=API_PREFIX)
 
     @app.get(f"{API_PREFIX}/health")
