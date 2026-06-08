@@ -18,6 +18,9 @@ Sources are named after the API/service the data comes from:
 - **medic_iabotdb** — WaybackMedic's edits to the IABot DB (archive add/modify/
   delete + URL status changes), from medic's `iabget.done` logs on host `rabbit`
   (global; 2017→).
+- **medic_enwiki** — WaybackMedic's dead-link repairs on English Wikipedia (links
+  moved to new URLs, archive URLs added, url-status flips, pages edited), computed
+  from each `meta/<name>.<range>/` project's logs on host `rabbit` (global; 2015→).
 
 ---
 
@@ -91,6 +94,8 @@ loaders/                  (clients/adapters; stdlib only)
   pull_iabotapi.py        IABot API pull: paced backfill + daily (Toolforge job)
   pull_medic_iabotdb.py   WaybackMedic IABot-DB log parser (--local-dir, dry-run, checkpointed)
   sync_medic_iabotdb.sh   acre cron: rsync iabget.done from rabbit + ingest new projects
+  pull_medic_enwiki.py    WaybackMedic enwiki-repair stats: remote-ssh compute on rabbit
+                          (no file transfer), dry-run + --since-days, checkpointed
 tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
 ```
 
@@ -184,6 +189,10 @@ $MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut
 printf %s "$TOK" > ~/.tss_token_iabotapi; chmod 600 ~/.tss_token_iabotapi
 ```
 
+The medic sources (`medic_iabotdb`, `medic_enwiki`) are loaded from `acre`, so their
+tokens live there too (issue on Toolforge, copy down to `~/.tss_token_medic_*` on acre,
+mode 600 — same pattern as eventstreams in step 6/7).
+
 ### 5. Start the webservice
 ```bash
 webservice python3.11 start
@@ -232,12 +241,15 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 |---|---|---|
 | `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1` | Tail new eventstreams rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
 | `30 3 * * *` | `/home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1` | rsync new iabget.done from rabbit's local disk + ingest newly-completed medic projects. |
+| `45 3 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1` | Compute enwiki-repair stats on rabbit for projects finished in the last 60 days + ingest newly-finished ones. |
 
 ```cron
 # TSS uploader — drain new eventstreams rows to TSS, 5 min after each cron-run cycle
 5,20,35,50 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1
 # WaybackMedic IABot-DB daily sync (rabbit local disk -> TSS)
 30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1
+# WaybackMedic enwiki-repair daily sync (remote compute on rabbit -> TSS)
+45 3 * * * /home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1
 ```
 The uploader holds a PID lockfile so runs never overlap.
 
@@ -309,6 +321,50 @@ rabbit (~1 min), ingests newly-completed projects (the per-project done-set in
 freshness-monitored (sporadic manual batches would false-alarm). After a manual
 backfill, `rm -rf /beater/medic_metaimp` when done (or just let the next sync clear it).
 
+### WaybackMedic (medic_enwiki)
+
+A *different* slice of medic from `medic_iabotdb`: the dead-link **repairs on English
+Wikipedia**, one `rabbit:/home/greenc/sharedNFS/medic/meta/<name>.<range>/` directory
+per project. A project is "finished" exactly when `discovered.orig` exists (the push
+script writes it only after edits land on enwiki); that file's mtime (falling back to
+`Documentation`'s) is the event date. Five global metrics are computed straight from
+each project's logs — the SAME numbers the per-project tcsh `stats` script reports:
+
+| metric | from | available since |
+|---|---|---|
+| `pages_edited` | `wc -l discovered.orig` | ~2015 |
+| `archives_added` | `wc -l newialink` + `wc -l newaltarch` | ~2015 |
+| `status_to_live` / `status_to_dead` | `grep -c 'url-status live\|dead' urlchanger` | ~2021 |
+| `links_moved` | sum of 5 `syslog` `urlchanger7.1.NN{A,B,I,H,D}` counts (= `stats`'s `convi`; `normal` is `[1-9]B`, excluding `7.1.0B`) | softredir era, ~Nov 2024 |
+
+**File-presence = data-presence:** a metric is emitted only when its source log
+exists; an absent log (an older project predating that feature) is NO DATA, not a
+zero. `links_moved` reads `syslog`, which contains only *this* project's enwiki moves
+— the iabot-system moves (digit-prefixed entries in the per-domain softredir cache)
+are logged elsewhere and counted under `medic_iabotdb`, so there's no double-count.
+(`stats` itself can be re-derived from `convi`/`nai`/`urlsli`/`urlsdi`/`disci`; we
+skip running it because it needs sheep-only softredir rulesets + a per-project arg,
+and the oldest projects predate `stats` entirely.)
+
+Compute happens **on rabbit over a single `ssh … bash -s` stream** (the big
+`syslog`/`urlchanger` files never cross the network and nothing is copied to /beater);
+the adapter receives one compact summary line per project.
+
+Backfill (one-time), run on acre — ALWAYS dry-run first:
+```bash
+cd /home/greenc/repos/gh/tss
+./loaders/pull_medic_enwiki.py --dry-run               # per-year breakdown, no upload (~90s)
+./loaders/pull_medic_enwiki.py --backfill              # all finished projects, rollups deferred
+# rebuild rollups (Toolforge)
+toolforge jobs run rebuild-medic-enwiki --image python3.11 --mount all --wait \
+  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py medic_enwiki'
+```
+Ongoing: the `pull_medic_enwiki.py --since-days 60` acre cron (above) recomputes only
+recently-finished projects and posts the new ones (per-project done-set in
+`~/.tss_medic_enwiki.state` skips the rest). Idempotent (`ext_key = <project>:<metric>`)
+and checkpointed, so a crash/re-run re-reads the fast stream and re-sends nothing.
+Not freshness-monitored (sporadic manual batches would false-alarm).
+
 ---
 
 ## Operations
@@ -335,9 +391,10 @@ toolforge jobs run monitor-once --image python3.11 --mount all --wait \
 records byte offsets in `~/.tss_outbox_iabw.state`.
 
 **Tokens:** plaintext lives only in `~/.tss_token` (eventstreams; on both the tss
-tool and acre), `~/.tss_token_booksup` (booksup; tss tool), and
-`~/.tss_token_iabotapi` (iabotapi; tss tool), mode 600, never in git. Only the
-SHA-256 hash is in the DB.
+tool and acre), `~/.tss_token_booksup` (booksup; tss tool), `~/.tss_token_iabotapi`
+(iabotapi; tss tool), and `~/.tss_token_medic_iabotdb` / `~/.tss_token_medic_enwiki`
+(the medic sources; on acre), mode 600, never in git. Only the SHA-256 hash is in
+the DB.
 
 ---
 
