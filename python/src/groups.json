@@ -1,5 +1,13 @@
 {
-  "_doc": "Optional pulldown groupings. A source listed here is split into named groups (each a metric subset); sources NOT listed default to one group = the whole source. Keys: id (stable), label_key (en.json), and one of categories[] (include only these) or exclude_categories[] (everything but these); optional include_metrics[] adds specific slugs regardless of category. Pure config — regrouping needs no code change.",
+  "_doc": "Optional pulldown groupings. A source listed here is split into named groups (each a metric subset); sources NOT listed default to one group = the whole source. Keys: id (stable), label_key (en.json), and ONE of: metrics[] (exactly these slugs, in order) | categories[] (only these) | exclude_categories[] (all but these); optional include_metrics[] adds slugs regardless of category. Pure config — regrouping needs no code change.",
+  "eventstreams": [
+    { "id": "es_iabot_wayback",    "label_key": "metric.eventstreams.iabot_wayback",    "metrics": ["iabot_wayback"] },
+    { "id": "es_user_wayback",     "label_key": "metric.eventstreams.user_wayback",     "metrics": ["user_wayback"] },
+    { "id": "es_otherbot_wayback", "label_key": "metric.eventstreams.otherbot_wayback", "metrics": ["otherbot_wayback"] },
+    { "id": "es_lamp",             "label_key": "metric.eventstreams.iabot_details",    "metrics": ["iabot_details"] },
+    { "id": "es_lamp_sim",         "label_key": "metric.eventstreams.iabot_sim",        "metrics": ["iabot_sim"] },
+    { "id": "es_media_users",      "label_key": "metric.eventstreams.other_details",    "metrics": ["other_details"] }
+  ],
   "arcstat": [
     { "id": "arcstat_links", "label_key": "source.arcstat", "exclude_categories": ["Media"] },
     { "id": "arcstat_media", "label_key": "group.arcstat_media", "categories": ["Media"] }

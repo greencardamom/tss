@@ -113,7 +113,7 @@
     var groups = groupsIn(state.house);
     var have = groups.some(function (g) { return g.id === state.group; });
     if ((!state.group || !have) && groups.length) {
-      var prefer = state.house === "activity" ? "eventstreams" : "arcstat_links";
+      var prefer = state.house === "activity" ? "es_iabot_wayback" : "arcstat_links";
       var p = groups.filter(function (g) { return g.id === prefer; })[0];
       state.group = (p || groups[0]).id;
     }
@@ -132,20 +132,22 @@
     var mets = grp ? grp.metrics : [];
     if (!state.metrics.length && mets.length)
       state.metrics = mets.map(function (m) { return m.slug; });
-    var box = el("div", { "class": "checks" });
-    mets.forEach(function (m) {
-      var id = "m-" + m.slug;
-      var inp = el("input", { type: "checkbox", id: id, value: m.slug });
-      if (state.metrics.indexOf(m.slug) >= 0) inp.checked = true;
-      inp.addEventListener("change", function () {
-        state.metrics = Array.prototype.map.call(
-          box.querySelectorAll("input:checked"), function (x) { return x.value; });
+    if (mets.length > 1) {               // one-metric groups (e.g. each eventstreams table) need no TABLES picker
+      var box = el("div", { "class": "checks" });
+      mets.forEach(function (m) {
+        var id = "m-" + m.slug;
+        var inp = el("input", { type: "checkbox", id: id, value: m.slug });
+        if (state.metrics.indexOf(m.slug) >= 0) inp.checked = true;
+        inp.addEventListener("change", function () {
+          state.metrics = Array.prototype.map.call(
+            box.querySelectorAll("input:checked"), function (x) { return x.value; });
+        });
+        box.appendChild(el("span", { "class": "chk" }, inp,
+          el("label", { "for": id, text: metLabel(grp ? grp.source : "", m) })));
       });
-      box.appendChild(el("span", { "class": "chk" }, inp,
-        el("label", { "for": id, text: metLabel(grp ? grp.source : "", m) })));
-    });
-    f.appendChild(el("div", { "class": "field tables" },
-      el("label", { "class": "flabel", text: t("ui.tables") }), box));
+      f.appendChild(el("div", { "class": "field tables" },
+        el("label", { "class": "flabel", text: t("ui.tables") }), box));
+    }
 
     // Grain
     f.appendChild(field("ui.grain", radioGroup("grain", state.grain, [
