@@ -15,6 +15,9 @@ Sources are named after the API/service the data comes from:
 - **booksup** — daily BooksUp usage counts, pulled from BooksUp's published JSONL.
 - **iabotapi** — authoritative per-wiki daily IABot activity from IABot's own
   statistics API (bot-only; 2015→).
+- **medic_iabotdb** — WaybackMedic's edits to the IABot DB (archive add/modify/
+  delete + URL status changes), from medic's `iabget.done` logs on host `rabbit`
+  (global; 2017→).
 
 ---
 
@@ -86,6 +89,8 @@ loaders/                  (clients/adapters; stdlib only)
   upload_outbox_iabw.py   live IABW uploader: byte-offset tail of db files (acre cron)
   pull_booksup.py         daily BooksUp pull from its JSONL (Toolforge job)
   pull_iabotapi.py        IABot API pull: paced backfill + daily (Toolforge job)
+  pull_medic_iabotdb.py   WaybackMedic IABot-DB log parser (--local-dir, dry-run, checkpointed)
+  sync_medic_iabotdb.sh   acre cron: rsync iabget.done from rabbit + ingest new projects
 tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
 ```
 
@@ -225,11 +230,14 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 
 | Schedule | Command | Purpose |
 |---|---|---|
-| `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1` | Tail new IABW rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
+| `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1` | Tail new eventstreams rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
+| `30 3 * * *` | `/home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1` | rsync new iabget.done from rabbit's local disk + ingest newly-completed medic projects. |
 
 ```cron
-# TSS uploader — drain new IABotWatch rows to TSS, 5 min after each cron-run cycle
+# TSS uploader — drain new eventstreams rows to TSS, 5 min after each cron-run cycle
 5,20,35,50 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1
+# WaybackMedic IABot-DB daily sync (rabbit local disk -> TSS)
+30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1
 ```
 The uploader holds a PID lockfile so runs never overlap.
 
@@ -274,6 +282,30 @@ To change the eventstreams staleness threshold X, recreate `monitor-tss` with
   toolforge jobs run iabotapi-backfill --image python3.11 --mount all --emails onfailure \
     --command 'python3 $HOME/www/loaders/pull_iabotapi.py --backfill >> $HOME/iabotapi_backfill.log 2>&1'
   ```
+
+### WaybackMedic (medic_iabotdb)
+
+medic's `iabget.done` logs live on host **rabbit** (local disk; `sheep` is a VM on
+rabbit and reaches them via a slow shared-folder NFS — do NOT stream through sheep).
+The logs total ~1.9 GB / ~4.8M lines, so always work from a **local copy** on acre.
+
+Backfill (one-time), run on acre:
+```bash
+# copy iabget.done from rabbit's local disk (fast)
+mkdir -p /beater/medic_metaimp
+rsync -rt --prune-empty-dirs --include='*/' --include='iabget.done' --exclude='*' \
+  rabbit:/home/greenc/sharedNFS/medic/metaimp/ /beater/medic_metaimp/
+# ALWAYS dry-run first (parse + breakdown, no upload, no state) — verify, then hot-run
+./loaders/pull_medic_iabotdb.py --dry-run  --local-dir /beater/medic_metaimp
+./loaders/pull_medic_iabotdb.py --backfill --local-dir /beater/medic_metaimp   # ~10 min
+# rebuild rollups (Toolforge)
+toolforge jobs run rebuild-medic --image python3.11 --mount all --wait \
+  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py medic_iabotdb'
+```
+Ongoing: the `sync_medic_iabotdb.sh` acre cron (above) rsyncs new files from rabbit
+and ingests newly-completed projects (the per-project done-set in
+`~/.tss_medic_iabotdb.state` skips the rest). Not freshness-monitored (sporadic
+manual batches would false-alarm).
 
 ---
 
