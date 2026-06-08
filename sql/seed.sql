@@ -213,3 +213,60 @@ ON DUPLICATE KEY UPDATE
     value_type  = VALUES(value_type),
     default_agg = VALUES(default_agg),
     category    = VALUES(category);
+
+
+-- ----------------------------------------------------------------------------
+-- Source: arcstat  (Archive-URL inventory across wikis; the FIRST gauge source).
+--   Unlike the others, these are LEVELS/snapshots ("as of date D, site X holds N
+--   wayback links"), not work-done-per-period. So value_type='gauge',
+--   default_agg='last': across time the rollup takes the latest reading in the
+--   period; the combined ('') total SUMS each wiki's last reading (the dashboard
+--   "all wikis" total). Per-site (entity = wiki), irregular cadence (monthly /
+--   quarterly / gaps). Fed from quepasa:~/toolforge/arcstat/db/master.db; one
+--   line per (site, reading) -> up to 17 metric events. "Monthly change" is a
+--   delta derived on read, not stored. Since 2019.
+--
+--   IMPORTANT: gauge metrics are only rolled up correctly by rebuild_source
+--   (defer + rebuild), NOT the live per-write recompute path. The loader always
+--   posts with ?rollup=defer and then rebuilds.
+-- ----------------------------------------------------------------------------
+INSERT INTO source (slug, name, description, ref_url_tpl)
+VALUES (
+    'arcstat',
+    'Archive URL counts',
+    'Inventory of web-archive URLs present across Wikipedias (per-site snapshots: wayback/alt-archive/archive.is/webcite links, pages-with-each, and archive.org media counts); since 2019.',
+    NULL
+)
+ON DUPLICATE KEY UPDATE
+    name        = VALUES(name),
+    description = VALUES(description),
+    ref_url_tpl = VALUES(ref_url_tpl);
+
+SET @arc = (SELECT source_id FROM source WHERE slug = 'arcstat');
+
+-- All gauge / 'last'. Field numbers refer to master.db column order (the leading
+-- standalone count is content_pages; then the 16 pipe-delimited positions 1..16).
+INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, category) VALUES
+    (@arc, 'content_pages',      'Content pages on the wiki',          'pages', 'gauge', 'last', 'Coverage'),
+    (@arc, 'wayback_links',      'Wayback links',                      'links', 'gauge', 'last', 'Links'),
+    (@arc, 'altarchive_links',   'Alt-archive links',                  'links', 'gauge', 'last', 'Links'),
+    (@arc, 'archiveis_links',    'Archive.is links',                   'links', 'gauge', 'last', 'Links'),
+    (@arc, 'webcite_links',      'WebCite links',                      'links', 'gauge', 'last', 'Links'),
+    (@arc, 'googlebooks_links',  'Google Books links (cite w/ ISBN)',  'links', 'gauge', 'last', 'Links'),
+    (@arc, 'pages_wayback',      'Pages with >=1 Wayback link',        'pages', 'gauge', 'last', 'Pages with'),
+    (@arc, 'pages_altarchive',   'Pages with >=1 alt-archive link',    'pages', 'gauge', 'last', 'Pages with'),
+    (@arc, 'pages_archiveis',    'Pages with >=1 Archive.is link',     'pages', 'gauge', 'last', 'Pages with'),
+    (@arc, 'pages_webcite',      'Pages with >=1 WebCite link',        'pages', 'gauge', 'last', 'Pages with'),
+    (@arc, 'media_texts',        'IA media: texts',                    'items', 'gauge', 'last', 'Media'),
+    (@arc, 'media_audio',        'IA media: audio',                    'items', 'gauge', 'last', 'Media'),
+    (@arc, 'media_movies',       'IA media: movies',                   'items', 'gauge', 'last', 'Media'),
+    (@arc, 'media_image',        'IA media: image',                    'items', 'gauge', 'last', 'Media'),
+    (@arc, 'media_other',        'IA media: other/none',               'items', 'gauge', 'last', 'Media'),
+    (@arc, 'media_texts_paged',  'IA media: texts with page numbers',  'items', 'gauge', 'last', 'Media'),
+    (@arc, 'media_dark',         'IA media: dark items',               'items', 'gauge', 'last', 'Media')
+ON DUPLICATE KEY UPDATE
+    label       = VALUES(label),
+    unit        = VALUES(unit),
+    value_type  = VALUES(value_type),
+    default_agg = VALUES(default_agg),
+    category    = VALUES(category);
