@@ -55,39 +55,54 @@ STATUS_MAP = {
 }
 
 ACTION_RE = re.compile(r"-a\s+(\S+)")
-PO_RE = re.compile(r"-p\s+'(.*)'\s+-o\s+'(.*)'\s*$")     # payload, old-archive-url
+P_RE = re.compile(r"-p\s+'([^']*)'")        # the -p payload (single-quoted)
+O_RE = re.compile(r"-o\s+'([^']*)'")        # the -o old-archive-url (OPTIONAL)
 IMPID_RE = re.compile(r"IMPID:\s*([^)]+)\)")
-IMPID_PARTS_RE = re.compile(r"^imp(\d{8})(.+)\.(\d{6}-\d{6})\.(\d+)$")
+# date is YYYYMMDD (most) or YYYY (some old projects); nametype may carry a
+# trailing ".cfg"; the oldest few have no nametype at all (those still trap).
+IMPID_PARTS_RE = re.compile(r"^imp(\d{4,8})(.+)\.(\d{6}-\d{6})\.(\d+)$")
 
 
 # --- parsing (pure; unit-tested on hand-fed samples) -----------------------
 
 def parse_line(line):
-    """-> (events, project_dir, ok). ok=False => trap; events=[] ok=True => blank."""
+    """-> (events, project_dir, status).
+    status: 'ok' (events, possibly [] for a blank line); 'skip' (a known-old line
+    we can't place in time — no IMPID/date or no md/a type; counted, not alarming);
+    'trap' (genuinely unexpected — surfaced + non-zero exit)."""
     s = line.strip()
     if not s:
-        return [], None, True
+        return [], None, "ok"
     am = ACTION_RE.search(s)
-    pom = PO_RE.search(s)
-    if not am or not pom:
-        return [], None, False
+    pm_p = P_RE.search(s)
+    if not am or not pm_p:
+        return [], None, "trap"
     action = am.group(1)
-    payload, old_o = pom.group(1), pom.group(2)
+    if action != "modifyurl":
+        return [], None, "trap"              # other actions: surface (deep past)
+    payload = pm_p.group(1)
+    om = O_RE.search(s)
+    old_o = om.group(1) if om else ""        # -o is OPTIONAL on older lines
     impm = IMPID_RE.search(payload)
-    if action != "modifyurl" or not impm:
-        return [], None, False
+    if not impm:
+        return [], None, "skip"              # no IMPID -> no date -> can't bucket
     impid = impm.group(1).strip()
     pm = IMPID_PARTS_RE.match(impid)
     if not pm:
-        return [], None, False
-    date8, nametype = pm.group(1), pm.group(2)
+        return [], None, "trap"              # IMPID present but unrecognized shape
+    date, nametype = pm.group(1), pm.group(2)
+    if nametype.endswith(".cfg"):            # some older projects carry a .cfg suffix
+        nametype = nametype[:-4]
     if nametype.endswith("md"):
         proj_type = "md"
     elif nametype.endswith("a"):
         proj_type = "a"
     else:
-        return [], None, False
-    ts = f"{date8[:4]}-{date8[4:6]}-{date8[6:8]}"
+        return [], None, "skip"              # no md/a type -> can't classify op
+    if len(date) == 8:
+        ts = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+    else:                                    # 4-digit year-only -> bucket to Jan 1
+        ts = f"{date}-01-01"
 
     params = {}
     for kv in payload.split("{&}"):
@@ -113,10 +128,10 @@ def parse_line(line):
     if ls:
         status = STATUS_MAP.get(ls)
         if status is None:
-            return [], None, False  # present but unknown code -> trap
+            return [], None, "trap"  # present but unknown code -> surface
         events.append({"metric": status, "ts": ts, "value": 1,
                        "ext_key": f"{impid}:{status}"})
-    return events, project_dir, True
+    return events, project_dir, "ok"
 
 
 # --- token / state / ssh ---------------------------------------------------
@@ -240,7 +255,7 @@ def main():
         buf = []
 
     t0 = time.monotonic()
-    nlines = events_seen = 0
+    nlines = events_seen = skipped_old = 0
     PROGRESS_EVERY = 200000
     src = f"local {args.local_dir}" if args.local_dir else f"ssh {HOST}"
     print(f"[+0s] reading iabget.done from {src} …", file=sys.stderr, flush=True)
@@ -249,9 +264,12 @@ def main():
                               " -maxdepth 2 -name iabget.done -type f -exec cat '{}' +"))
     for line in stream:
         nlines += 1
-        events, proj, ok = parse_line(line)
-        if not ok:
+        events, proj, status = parse_line(line)
+        if status == "trap":
             unknown.append(line.strip())
+            continue
+        if status == "skip":               # known-old, undatable — count, don't alarm
+            skipped_old += 1
             continue
         if not events:
             continue
@@ -269,7 +287,7 @@ def main():
 
     mode = "DRY RUN" if args.dry_run else ("backfill" if args.backfill else "poll")
     print(f"{mode}: {ingested} projects ({total} events), {skipped} already-done, "
-          f"{len(unknown)} trapped lines")
+          f"{skipped_old:,} undatable-old skipped, {len(unknown)} trapped")
     if args.dry_run:
         print("events by metric (NOTHING posted):")
         for metric, n in sorted(tally.items()):
