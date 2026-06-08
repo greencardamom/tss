@@ -144,7 +144,8 @@
       box.appendChild(el("span", { "class": "chk" }, inp,
         el("label", { "for": id, text: metLabel(grp ? grp.source : "", m) })));
     });
-    f.appendChild(field("ui.tables", box));
+    f.appendChild(el("div", { "class": "field tables" },
+      el("label", { "class": "flabel", text: t("ui.tables") }), box));
 
     // Grain
     f.appendChild(field("ui.grain", radioGroup("grain", state.grain, [
