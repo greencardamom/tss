@@ -4,6 +4,7 @@
   "ui.go": "Go",
   "ui.loading": "Loading…",
   "ui.no_data": "no data",
+  "ui.no_wiki_match": "No wiki matches:",
   "ui.house": "View",
   "ui.house.activity": "Activity (work by tools & bots)",
   "ui.house.inventory": "Inventory (URL counts)",
