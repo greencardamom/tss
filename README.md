@@ -38,6 +38,7 @@ Sources are named after the API/service the data comes from:
 - [Repo layout](#repo-layout)
 - [Data model](#data-model)
 - [API (v1)](#api-v1)
+- [Front-end (dashboard)](#front-end-dashboard)
 - [Setup (one-time)](#setup-one-time)
 - [Cron jobs / scheduled jobs](#cron-jobs--scheduled-jobs)
 - [Operations](#operations)
@@ -90,8 +91,14 @@ python/src/               (served by the webservice; DB scripts run as py3.11 jo
   rollup.py               recompute() per-write + rebuild_source() set-based
   rebuild_rollups.py      standalone full rollup rebuild for a source (run as job)
   monitor_tss.py          data-freshness check; exits non-zero if a source is stale
-  api/read.py             public read API (catalog, /series, /events)
+  api/read.py             public read API (catalog, /series, /events, /grid)
   api/write.py            POST /events, registration, /sources/<slug>/rebuild-rollups
+  web.py                  dashboard route ("/") — renders the shell + injects i18n
+  i18n.py                 message-catalog loader (messages/<lang>.json)
+  messages/en.json        all UI + data-label text (the only place strings live)
+  templates/dashboard.html  dashboard shell (bootstraps catalog, loads tss.js + uPlot)
+  static/tss.js,tss.css   data-driven dashboard (control panel, grids, uPlot charts)
+  static/uPlot.*          vendored chart lib (no CDN at runtime)
   requirements.txt        pinned to the Toolforge python3.11 runtime
 loaders/                  (clients/adapters; stdlib only)
   tss_http.py             shared hardened POST-with-retry helper
@@ -155,6 +162,11 @@ Base: `https://tss.toolforge.org/api/v1`
 - `GET /series?source=&metric=&entity=&grain=day|month|year&from=&to=&fill=none|zero|null`
   — `entity=_all` for the combined total. The graph engine.
 - `GET /events?source=&metric=&entity=&date=&page=&limit=` — drill-through to raw rows.
+- `GET /catalog` — every source with its metrics + derived `house` (activity/inventory);
+  powers the dashboard control panel in one call.
+- `GET /grid?source=&metric=&grain=&from=&to=` — all entities × periods in one response
+  (the spreadsheet matrix; `/series` is per-entity). `null` cells = no data; the combined
+  `_all` row is returned separately.
 
 **Write (per-source `Authorization: Bearer <token>`):**
 - `POST /events?rollup=defer` — body `{ "events": [ {metric, ts, value, ext_key, entity?, ref_id?, dims?} ] }`.
@@ -166,6 +178,36 @@ Base: `https://tss.toolforge.org/api/v1`
 **Admin (`Authorization: Bearer <TSS_ADMIN_TOKEN>`, optional — `seed.sql` does the same):**
 - `POST /sources`
 - `POST /sources/<slug>/metrics`
+
+---
+
+## Front-end (dashboard)
+
+Served at `/` (https://tss.toolforge.org/). A single page, **data-driven** entirely
+from the read API — it reads nothing source-specific in code, so new sources/metrics
+appear automatically.
+
+- **Two houses**, derived from `value_type`: **Activity** (flow — work by tools/bots)
+  vs **Inventory** (gauge — URL state on the wikis). A source is Inventory iff *all*
+  its metrics are gauges.
+- **Control panel → Go → result below.** Pick house → source → tables (metrics,
+  multi-select) → grain (D/M/Y) → display (grid | chart), plus a single-wiki filter and
+  a "summary only" (combined `_all`) toggle.
+- **Grid** = wiki × period (sortable columns, per-wiki row + a combined row). Flow shows
+  a row **Total**; gauge shows **Latest** (a period-sum of a level is meaningless). A
+  `null` cell (no data) renders as `·`, distinct from a real `0`. uniq\* gauges show the
+  per-wiki-sum caveat.
+- **Chart** = uPlot: **bars** for flow, **line** for gauge (combined, or the filtered wiki).
+- **i18n / labels:** every string — UI chrome *and* source/metric labels — comes from
+  `messages/<lang>.json` via a `t()` lookup (DB label is the fallback). Change a label =
+  edit `en.json`; add a language = add `fr.json`/`de.json` (auto-listed). Locale via
+  `?lang=`; numbers are locale-formatted. **Permalinks:** the full control-panel state is
+  encoded in the URL.
+- Backed by `GET /catalog` (control panel) + `GET /grid` (the matrix).
+
+**Not yet:** the dashboard is currently **unauthenticated** (it reads the already-public
+API) — gating it behind login/Wikimedia OAuth, and adding `fr`/`de` catalogs, are the
+next layers.
 
 ---
 
