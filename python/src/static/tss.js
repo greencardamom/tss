@@ -340,10 +340,12 @@
       gr.className = "grand";
       return gr;
     }
+    var collapsed = longTable && !expanded;
     var showGrand = g.all && !filtering;   // only when not filtered to a single wiki
-    if (showGrand && longTable) tb.appendChild(grandRow());   // top copy on long tables
+    if (showGrand && longTable) tb.appendChild(grandRow());   // TOP on long tables
     shown.forEach(function (r) { tb.appendChild(dataRow(r.entity, r.values, isGauge, order)); });
-    if (showGrand) tb.appendChild(grandRow());                // bottom copy (always)
+    if (showGrand && !collapsed) tb.appendChild(grandRow());  // BOTTOM only when not collapsed
+                                                              // (short table, or expanded)
     table.appendChild(tb);
 
     if (isGauge && g.metric.indexOf("uniq") === 0)
