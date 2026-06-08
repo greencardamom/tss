@@ -248,12 +248,13 @@
       status.textContent = "";
       grids.forEach(function (g) {
         var block = el("div", { "class": "block" });
-        block.appendChild(el("h2", {
-          text: t("metric." + g.source + "." + g.metric, g.label || g.metric) }));
+        var head = el("h2", {}, el("span", { text:
+          t("metric." + g.source + "." + g.metric, g.label || g.metric) }));
+        block.appendChild(head);
         var host = el("div", {});
         block.appendChild(host);
         if (state.display === "chart") renderChart(host, g);
-        else renderGrid(host, g);
+        else renderGrid(host, g, head);     // head: where the Show all/Collapse btn sits
         result.appendChild(block);
       });
     }).catch(function (e) { status.textContent = "" + e; });
@@ -295,8 +296,12 @@
       return (av - bv) * d;
     });
   }
-  function renderGrid(host, g) {
+  function renderGrid(host, g, head) {
     host.innerHTML = "";
+    if (head) {                            // drop a stale expand/collapse btn (re-render)
+      var ob = head.querySelector("button.expand");
+      if (ob) ob.remove();
+    }
     var isGauge = g.value_type === "gauge";
     var filtering = !!state.wiki;
     var rows = filtering
@@ -319,7 +324,7 @@
       hr.appendChild(el("th", { "class": "num sortable",
         on: { click: function () {
           g._sort = { col: i, dir: (g._sort && g._sort.col === i && g._sort.dir === -1) ? 1 : -1 };
-          applySort(g); renderGrid(host, g);
+          applySort(g); renderGrid(host, g, head);
         } }, text: bucketLabel(g.buckets[i], g.grain) }));
     });
     table.appendChild(el("thead", {}, hr));
@@ -345,11 +350,12 @@
       host.appendChild(el("div", { "class": "caveat", text: t("ui.uniq_caveat") }));
     host.appendChild(el("div", { "class": "tablewrap" }, table));
     if (longTable) {
-      host.appendChild(el("button", { "class": "expand", on: { click: function () {
-        g._expanded = !expanded; renderGrid(host, g);
+      var btn = el("button", { "class": "expand", on: { click: function () {
+        g._expanded = !expanded; renderGrid(host, g, head);
       } } }, expanded
         ? t("ui.collapse")
-        : t("ui.expand") + " (" + fmt(rows.length) + ")"));
+        : t("ui.expand") + " (" + fmt(rows.length) + ")");
+      (head || host).appendChild(btn);     // sits next to the table title
     }
   }
 
