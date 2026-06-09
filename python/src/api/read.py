@@ -15,16 +15,24 @@ _GROUPS_PATH = os.path.join(
 _groups_cache = None
 
 
-def _group_overrides():
+def _groups_raw():
     global _groups_cache
     if _groups_cache is None:
         try:
             with open(_GROUPS_PATH, encoding="utf-8") as fh:
-                _groups_cache = {k: v for k, v in json.load(fh).items()
-                                 if not k.startswith("_")}
+                _groups_cache = json.load(fh)
         except (OSError, ValueError):
             _groups_cache = {}
     return _groups_cache
+
+
+def _group_overrides():
+    return {k: v for k, v in _groups_raw().items() if not k.startswith("_")}
+
+
+def _group_order():
+    # "_order": group ids in the order the pulldown should list them
+    return _groups_raw().get("_order", [])
 
 
 def _filter_metrics(metrics, gdef):
@@ -258,6 +266,10 @@ def catalog():
         else:
             out.append({"id": s["slug"], "house": house, "source": s["slug"],
                         "label_key": "source." + s["slug"], "metrics": ms})
+    order = _group_order()
+    if order:                              # explicit pulldown order; unlisted go last
+        rank = {gid: i for i, gid in enumerate(order)}
+        out.sort(key=lambda g: rank.get(g["id"], len(rank)))
     return jsonify(out)
 
 

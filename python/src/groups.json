@@ -3,42 +3,42 @@
   "eventstreams": [
     {
       "id": "es_iabot_wayback",
-      "label_key": "metric.eventstreams.iabot_wayback",
+      "label_key": "group.es_iabot_wayback",
       "metrics": [
         "iabot_wayback"
       ]
     },
     {
       "id": "es_user_wayback",
-      "label_key": "metric.eventstreams.user_wayback",
+      "label_key": "group.es_user_wayback",
       "metrics": [
         "user_wayback"
       ]
     },
     {
       "id": "es_otherbot_wayback",
-      "label_key": "metric.eventstreams.otherbot_wayback",
+      "label_key": "group.es_otherbot_wayback",
       "metrics": [
         "otherbot_wayback"
       ]
     },
     {
       "id": "es_lamp",
-      "label_key": "metric.eventstreams.iabot_details",
+      "label_key": "group.es_lamp",
       "metrics": [
         "iabot_details"
       ]
     },
     {
       "id": "es_lamp_sim",
-      "label_key": "metric.eventstreams.iabot_sim",
+      "label_key": "group.es_lamp_sim",
       "metrics": [
         "iabot_sim"
       ]
     },
     {
       "id": "es_media_users",
-      "label_key": "metric.eventstreams.other_details",
+      "label_key": "group.es_media_users",
       "metrics": [
         "other_details"
       ]
@@ -47,7 +47,7 @@
   "iabotapi": [
     {
       "id": "iabotapi",
-      "label_key": "source.iabotapi",
+      "label_key": "group.iabotapi",
       "metrics": [
         "dead_links",
         "live_links",
@@ -63,7 +63,7 @@
   "arcstat": [
     {
       "id": "arcstat_links",
-      "label_key": "source.arcstat",
+      "label_key": "group.arcstat_links",
       "metrics": [
         "content_pages",
         "wayback_links",
@@ -94,7 +94,7 @@
   "medic_enwiki": [
     {
       "id": "medic_enwiki",
-      "label_key": "source.medic_enwiki",
+      "label_key": "group.medic_enwiki",
       "metrics": [
         "pages_edited",
         "archives_added",
@@ -107,7 +107,7 @@
   "medic_iabotdb": [
     {
       "id": "medic_iabotdb",
-      "label_key": "source.medic_iabotdb",
+      "label_key": "group.medic_iabotdb",
       "metrics": [
         "archive_add",
         "archive_modify",
@@ -124,7 +124,7 @@
   "numberofurl": [
     {
       "id": "numberofurl",
-      "label_key": "source.numberofurl",
+      "label_key": "group.numberofurl",
       "metrics": [
         "pages",
         "urls",
@@ -144,5 +144,20 @@
         "pageswebciteurls"
       ]
     }
+  ],
+  "_order": [
+    "iabotapi",
+    "es_iabot_wayback",
+    "es_user_wayback",
+    "es_otherbot_wayback",
+    "es_lamp",
+    "es_lamp_sim",
+    "es_media_users",
+    "medic_enwiki",
+    "medic_iabotdb",
+    "booksup",
+    "arcstat_links",
+    "numberofurl",
+    "arcstat_media"
   ]
 }
