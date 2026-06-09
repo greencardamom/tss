@@ -8,7 +8,7 @@
   "ui.house": "View",
   "ui.house.activity": "Activity (work by tools & bots)",
   "ui.house.inventory": "Inventory (URL counts)",
-  "ui.source": "Source",
+  "ui.source": "Dataset",
   "ui.tables": "Tables",
   "ui.grain": "Period",
   "ui.grain.day": "Daily",
