@@ -249,8 +249,8 @@
       status.textContent = "";
       grids.forEach(function (g) {
         var block = el("div", { "class": "block" });
-        var desc = t("desc." + g.source + "." + g.metric, "");   // per-metric caption
-        if (desc) block.appendChild(el("div", { "class": "caption", text: desc }));
+        var desc = t("desc." + g.source + "." + g.metric, "");   // per-metric caption (trusted HTML from catalog)
+        if (desc) block.appendChild(el("div", { "class": "caption", html: desc }));
         var head = el("h2", {}, el("span", { text:
           t("metric." + g.source + "." + g.metric, g.label || g.metric) }));
         block.appendChild(head);
