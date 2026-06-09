@@ -48,7 +48,7 @@
   "metric.eventstreams.iabot_wayback": "Wayback links added by IABot",
   "desc.eventstreams.iabot_wayback": "Number of Wayback links added by IABot. Counts observed from the <a href='https://www.mediawiki.org/wiki/EventStreams'>MediaWiki EventStream API</a> have a less than 5% margin of error. For more precision see the <a href='/?house=activity&group=iabotapi&metrics=dead_edits,proactive_edits,reactive_edits,unknown_edits,dead_links,live_links,tag_links,unknown_links&grain=year&display=grid'>InternetArchiveBot API</a> results.",
   "metric.eventstreams.user_wayback": "Wayback links added by Users",
-  "desc.eventstreams.user_wayback": "Number of Wayback links added by users (human editors). Counts observed from the <a href='https://www.mediawiki.org/wiki/EventStreams'>MediaWiki EventStream API</a> have a less than 5% margin of error.",
+  "desc.eventstreams.user_wayback": "Number of Wayback links added by human editors. Counts observed from the <a href='https://www.mediawiki.org/wiki/EventStreams'>MediaWiki EventStream API</a> have a less than 5% margin of error.",
   "metric.eventstreams.otherbot_wayback": "Wayback links added by User Bots",
   "desc.eventstreams.otherbot_wayback": "Number of Wayback links added by user bots — automated accounts other than IABot. Counts observed from the <a href='https://www.mediawiki.org/wiki/EventStreams'>MediaWiki EventStream API</a> have a less than 5% margin of error.",
   "metric.eventstreams.iabot_details": "LAMP",
