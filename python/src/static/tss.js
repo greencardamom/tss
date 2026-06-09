@@ -116,28 +116,35 @@
     // House
     f.appendChild(field("ui.house", radioGroup("house", state.house, [
       { v: "activity", label: t("ui.house.activity") },
-      { v: "inventory", label: t("ui.house.inventory") }
+      { v: "inventory", label: t("ui.house.inventory") },
+      { v: "analysis", label: t("ui.house.analysis") }
     ], function (v) {
-      state.house = v; state.group = null; state.metrics = []; renderControls();
+      state.house = v; state.group = null; state.metrics = []; state.offset = 0; renderControls();
     })));
 
-    // Dataset (group) within house
+    // Dataset (group) within house  (Analysis house: the list is curated questions)
     var groups = groupsIn(state.house);
     var have = groups.some(function (g) { return g.id === state.group; });
     if ((!state.group || !have) && groups.length) {
-      var prefer = state.house === "activity" ? "iabotapi" : "arcstat_links";
-      var p = groups.filter(function (g) { return g.id === prefer; })[0];
+      var prefer = state.house === "activity" ? "iabotapi"
+                 : state.house === "inventory" ? "arcstat_links" : null;
+      var p = prefer && groups.filter(function (g) { return g.id === prefer; })[0];
       state.group = (p || groups[0]).id;
     }
-    var sel = el("select", { on: { change: function (e) {
+    var dsel = el("select", { on: { change: function (e) {
       state.group = e.target.value; state.metrics = []; renderControls();
     } } });
     groups.forEach(function (g) {
       var o = el("option", { value: g.id, text: groupLabel(g) });
       if (g.id === state.group) o.selected = true;
-      sel.appendChild(o);
+      dsel.appendChild(o);
     });
-    f.appendChild(field("ui.source", sel));
+    f.appendChild(field(state.house === "analysis" ? "ui.question" : "ui.source", dsel));
+
+    if (state.house === "analysis") {        // analysis: just pick a question + Go
+      f.appendChild(el("button", { "class": "go", on: { click: run } }, t("ui.go")));
+      return;
+    }
 
     // Tables (metrics) — multi-select
     var grp = curGroup();
@@ -248,7 +255,13 @@
     result.innerHTML = "";
     var status = document.getElementById("status");
     var grp = curGroup();
-    if (!grp || !state.metrics.length) { status.textContent = ""; return; }
+    if (!grp) { status.textContent = ""; return; }
+    if (grp.house === "analysis") {          // curated cross-dataset question
+      status.textContent = t("ui.loading");
+      renderAnalysis(result, grp.analysis, status);
+      return;
+    }
+    if (!state.metrics.length) { status.textContent = ""; return; }
     status.textContent = t("ui.loading");
 
     var rg = periodRange(state.grain, state.offset);
@@ -454,6 +467,77 @@
     host.appendChild(wrap);
   }
 
+  // --- Analysis: a curated question, its series shown side-by-side -----------
+  function renderAnalysis(result, q, status) {
+    if (!q) { status.textContent = ""; return; }
+    var qs = "&entity=_all&grain=year&from=2015-01-01&to=2026-12-31&fill=none";
+    var jobs = [];
+    q.series.forEach(function (s) {
+      s.parts.forEach(function (p) {
+        jobs.push(api("/series?source=" + encodeURIComponent(p[0]) +
+          "&metric=" + encodeURIComponent(p[1]) + qs)
+          .then(function (d) { d.__label = s.label; return d; }));
+      });
+    });
+    Promise.all(jobs).then(function (ds) {
+      status.textContent = "";
+      var per = {}, yearset = {};
+      q.series.forEach(function (s) { per[s.label] = {}; });
+      ds.forEach(function (d) {
+        (d.points || []).forEach(function (pt) {
+          var y = pt.bucket.slice(0, 4); yearset[y] = 1;
+          per[d.__label][y] = (per[d.__label][y] || 0) + pt.value;
+        });
+      });
+      var years = Object.keys(yearset).sort();
+      var cur = String(new Date().getUTCFullYear());
+
+      var block = el("div", { "class": "block" });
+      block.appendChild(el("h2", {}, el("span", { text: t(q.q, q.id) })));
+      var note = t(q.note, "");
+      if (note) block.appendChild(el("div", { "class": "caption", html: note }));
+
+      // side-by-side summary table: tool | this year | all time
+      var table = el("table", { "class": "grid" });
+      var hr = el("tr");
+      hr.appendChild(el("th", { "class": "site", text: t("ui.tool") }));
+      hr.appendChild(el("th", { "class": "num", text: t("ui.this_year") + " (" + cur + ")" }));
+      hr.appendChild(el("th", { "class": "num total", text: t("ui.alltime") }));
+      table.appendChild(el("thead", {}, hr));
+      var tb = el("tbody");
+      q.series.forEach(function (s) {
+        var m = per[s.label], allt = 0, any = false;
+        for (var y in m) { allt += m[y]; any = true; }
+        var tr = el("tr");
+        tr.appendChild(el("th", { "class": "site", text: s.label }));
+        tr.appendChild(cell(m[cur] != null ? m[cur] : null));
+        tr.appendChild(el("td", { "class": "num total" }, fmt(any ? allt : null)));
+        tb.appendChild(tr);
+      });
+      table.appendChild(tb);
+      block.appendChild(el("div", { "class": "tablewrap" }, table));
+
+      // trend: one line per series over the years
+      var host = el("div", {});
+      block.appendChild(host);
+      var xs = years.map(function (y) { return Date.parse(y + "-01-01T00:00:00Z") / 1000; });
+      var data = [xs], series = [{}];
+      q.series.forEach(function (s, i) {
+        data.push(years.map(function (y) { return per[s.label][y] != null ? per[s.label][y] : null; }));
+        series.push({ label: s.label, stroke: PALETTE[i % PALETTE.length], width: 1.8,
+                      points: { show: true, size: 4 } });
+      });
+      var w = host.clientWidth || result.clientWidth || 800;
+      var u = new uPlot({ width: w, height: 300, scales: { x: { time: true } }, series: series,
+                          axes: [ {}, { size: 60, values: function (u, v) { return v.map(abbrev); } } ] },
+                        data, host);
+      window.addEventListener("resize", function () {
+        u.setSize({ width: host.clientWidth || w, height: 300 });
+      });
+      result.appendChild(block);
+    }).catch(function (e) { status.textContent = "" + e; });
+  }
+
   function init() {
     document.getElementById("title").textContent = t("ui.title");
     document.getElementById("subtitle").textContent = t("ui.subtitle");
@@ -461,8 +545,14 @@
     readUrl();
     api("/catalog").then(function (cat) {
       CATALOG = cat;
+      // append the curated Analysis-house questions as pseudo-groups
+      (TSS.analysis || []).forEach(function (q) {
+        CATALOG.push({ id: q.id, house: "analysis", source: null,
+                       label_key: q.q, analysis: q });
+      });
       renderControls();
-      if (state.group && state.metrics.length) run();
+      var g = curGroup();
+      if (state.group && (state.metrics.length || (g && g.house === "analysis"))) run();
     }).catch(function (e) {
       document.getElementById("status").textContent = "" + e;
     });
