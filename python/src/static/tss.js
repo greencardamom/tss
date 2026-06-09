@@ -252,12 +252,12 @@
       if (srcDesc) result.appendChild(el("div", { "class": "caption source-caption", html: srcDesc }));
       grids.forEach(function (g) {
         var block = el("div", { "class": "block" });
-        // per-table caption (trusted HTML), only when a metric-specific desc exists
-        var desc = t("desc." + g.source + "." + g.metric, "");
-        if (desc) block.appendChild(el("div", { "class": "caption", html: desc }));
         var head = el("h2", {}, el("span", { text:
           t("metric." + g.source + "." + g.metric, g.label || g.metric) }));
         block.appendChild(head);
+        // per-table caption (trusted HTML) — between the title and the table
+        var desc = t("desc." + g.source + "." + g.metric, "");
+        if (desc) block.appendChild(el("div", { "class": "caption", html: desc }));
         var host = el("div", {});
         block.appendChild(host);
         if (state.display === "trend") renderTrend(host, g);
