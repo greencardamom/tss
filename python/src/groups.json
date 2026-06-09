@@ -68,12 +68,12 @@
         "content_pages",
         "wayback_links",
         "pages_wayback",
-        "altarchive_links",
-        "pages_altarchive",
         "archiveis_links",
         "pages_archiveis",
         "webcite_links",
-        "pages_webcite"
+        "pages_webcite",
+        "altarchive_links",
+        "pages_altarchive"
       ]
     },
     {

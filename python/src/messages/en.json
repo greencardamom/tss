@@ -82,14 +82,14 @@
   "desc.medic_iabotdb.set_paywall": "URLs set to status paywall.",
   "desc.medic_iabotdb.set_permadead": "URLs blacklisted (permanently dead).",
   "desc.medic_iabotdb.set_permalive": "URLs whitelisted (permanently live).",
-  "metric.arcstat.content_pages": "Content pages",
-  "desc.arcstat.content_pages": "Content pages on the wiki.",
+  "metric.arcstat.content_pages": "Number of pages",
+  "desc.arcstat.content_pages": "Number of mainspace pages.",
   "desc.arcstat.wayback_links": "Count of Wayback links.",
   "desc.arcstat.pages_wayback": "Count of pages with a Wayback link.",
-  "desc.arcstat.altarchive_links": "Count of alt-archive links (not Archive.is or WebCite).",
+  "desc.arcstat.altarchive_links": "Count of alt-archive links (not Archive.today or WebCite).",
   "desc.arcstat.pages_altarchive": "Count of pages with an alt-archive link.",
-  "desc.arcstat.archiveis_links": "Count of Archive.is links.",
-  "desc.arcstat.pages_archiveis": "Count of pages with an Archive.is link.",
+  "desc.arcstat.archiveis_links": "Count of Archive.today links.",
+  "desc.arcstat.pages_archiveis": "Count of pages with an Archive.today link.",
   "desc.arcstat.webcite_links": "Count of WebCite links.",
   "desc.arcstat.pages_webcite": "Count of pages with a WebCite link.",
   "desc.arcstat.media_texts": "Count of archive.org /details/ texts.",
@@ -131,5 +131,7 @@
   "group.numberofurl": "Archive URL Counts (version 2)",
   "metric.numberofurl.ialiburls": "Internet Archive book URLs",
   "metric.numberofurl.uniqialiburls": "Internet Archive book URLs (unique per wiki)",
-  "metric.numberofurl.pagesialiburls": "Pages with Internet Archive book URLs"
+  "metric.numberofurl.pagesialiburls": "Pages with Internet Archive book URLs",
+  "metric.arcstat.archiveis_links": "Archive.today links",
+  "metric.arcstat.pages_archiveis": "Pages with >=1 Archive.today link"
 }
