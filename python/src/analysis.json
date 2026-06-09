@@ -1,0 +1,16 @@
+{
+  "_doc": "Analysis house: curated cross-dataset questions. Each question has 'series' shown SIDE-BY-SIDE (never silently summed). A series' value is the sum of its 'parts' ([source, metric]). Answered client-side from /series (_all, yearly). q/note are i18n keys.",
+  "questions": [
+    {
+      "id": "deadlinks_fixed",
+      "q": "analysis.deadlinks_fixed.q",
+      "note": "analysis.deadlinks_fixed.note",
+      "series": [
+        { "label": "InternetArchiveBot",
+          "parts": [["iabotapi", "dead_links"]] },
+        { "label": "WaybackMedic",
+          "parts": [["medic_enwiki", "archives_added"], ["medic_enwiki", "links_moved"]] }
+      ]
+    }
+  ]
+}
