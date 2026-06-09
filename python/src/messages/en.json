@@ -48,6 +48,8 @@
   "metric.eventstreams.otherbot_wayback": "Wayback links added by User Bots",
   "desc.eventstreams.otherbot_wayback": "Number of Wayback links added by user bots — automated accounts other than IABot. Data captured via the MediaWiki EventStream API is approximate.",
   "metric.eventstreams.iabot_details": "LAMP",
+  "desc.eventstreams.iabot_details": "Number of archive.org/details links for books added to Wikipedia by LAMP bot. Data captured via the MediaWiki EventStream API is approximate.",
   "metric.eventstreams.iabot_sim": "LAMP SIM",
+  "desc.eventstreams.iabot_sim": "Number of archive.org/details links for journals added to Wikipedia by LAMP bot. Data captured via the MediaWiki EventStream API is approximate.",
   "metric.eventstreams.other_details": "Media links (/details/) added by Users"
 }
