@@ -8,6 +8,11 @@
     { "id": "es_lamp_sim",         "label_key": "metric.eventstreams.iabot_sim",        "metrics": ["iabot_sim"] },
     { "id": "es_media_users",      "label_key": "metric.eventstreams.other_details",    "metrics": ["other_details"] }
   ],
+  "iabotapi": [
+    { "id": "iabotapi", "label_key": "source.iabotapi",
+      "metrics": ["dead_links", "live_links", "tag_links", "unknown_links",
+                  "reactive_edits", "proactive_edits", "dead_edits", "unknown_edits"] }
+  ],
   "arcstat": [
     { "id": "arcstat_links", "label_key": "source.arcstat", "exclude_categories": ["Media"] },
     { "id": "arcstat_media", "label_key": "group.arcstat_media", "categories": ["Media"] }
