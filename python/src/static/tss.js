@@ -471,47 +471,88 @@
   function renderAnalysis(result, q, status) {
     if (!q) { status.textContent = ""; return; }
     var qs = "&entity=_all&grain=year&from=2015-01-01&to=2026-12-31&fill=none";
+    var pct = (q.unit === "percent");   // ratio cards render as % (level), not sums
     var jobs = [];
+    function fetchPart(p, label, role) {
+      jobs.push(api("/series?source=" + encodeURIComponent(p[0]) +
+        "&metric=" + encodeURIComponent(p[1]) + qs)
+        .then(function (d) { d.__label = label; d.__role = role; return d; }));
+    }
     q.series.forEach(function (s) {
-      s.parts.forEach(function (p) {
-        jobs.push(api("/series?source=" + encodeURIComponent(p[0]) +
-          "&metric=" + encodeURIComponent(p[1]) + qs)
-          .then(function (d) { d.__label = s.label; return d; }));
-      });
+      if (s.op === "ratio") {
+        (s.num || []).forEach(function (p) { fetchPart(p, s.label, "num"); });
+        (s.den || []).forEach(function (p) { fetchPart(p, s.label, "den"); });
+      } else {
+        (s.parts || []).forEach(function (p) { fetchPart(p, s.label, "sum"); });
+      }
     });
     Promise.all(jobs).then(function (ds) {
       status.textContent = "";
-      var per = {}, yearset = {};
-      q.series.forEach(function (s) { per[s.label] = {}; });
+      var num = {}, den = {}, sum = {}, yearset = {};
+      q.series.forEach(function (s) { num[s.label] = {}; den[s.label] = {}; sum[s.label] = {}; });
       ds.forEach(function (d) {
         (d.points || []).forEach(function (pt) {
           var y = pt.bucket.slice(0, 4); yearset[y] = 1;
-          per[d.__label][y] = (per[d.__label][y] || 0) + pt.value;
+          var bag = d.__role === "num" ? num : d.__role === "den" ? den : sum;
+          bag[d.__label][y] = (bag[d.__label][y] || 0) + pt.value;
         });
       });
       var years = Object.keys(yearset).sort();
       var cur = String(new Date().getUTCFullYear());
+
+      // per[label][y]: value to plot (ratio % for ratio series, summed flow otherwise).
+      // cnt[label][y]: the raw numerator behind a ratio (shown in the Count column).
+      var per = {}, cnt = {};
+      q.series.forEach(function (s) {
+        per[s.label] = {}; cnt[s.label] = {};
+        years.forEach(function (y) {
+          if (s.op === "ratio") {
+            var dv = den[s.label][y];
+            if (dv) {
+              var nv = (num[s.label][y] || 0) + (s.num_const || 0);
+              per[s.label][y] = nv / dv * (s.scale || 100);
+              cnt[s.label][y] = nv;
+            }
+          } else if (y in sum[s.label]) {
+            per[s.label][y] = sum[s.label][y];
+          }
+        });
+      });
+      function latest(m) {
+        for (var i = years.length - 1; i >= 0; i--) if (m[years[i]] != null) return years[i];
+        return null;
+      }
 
       var block = el("div", { "class": "block" });
       block.appendChild(el("h2", {}, el("span", { text: t(q.q, q.id) })));
       var note = t(q.note, "");
       if (note) block.appendChild(el("div", { "class": "caption", html: note }));
 
-      // side-by-side summary table: tool | this year | all time
+      // side-by-side summary table. percent cards: series | latest % | count.
+      // flow cards: series | this year | all time.
       var table = el("table", { "class": "grid" });
       var hr = el("tr");
       hr.appendChild(el("th", { "class": "site", text: t("ui.tool") }));
-      hr.appendChild(el("th", { "class": "num", text: t("ui.this_year") + " (" + cur + ")" }));
-      hr.appendChild(el("th", { "class": "num total", text: t("ui.alltime") }));
+      hr.appendChild(el("th", { "class": "num", text: pct ? t("ui.latest")
+                                                          : t("ui.this_year") + " (" + cur + ")" }));
+      hr.appendChild(el("th", { "class": "num total", text: pct ? t("ui.count") : t("ui.alltime") }));
       table.appendChild(el("thead", {}, hr));
       var tb = el("tbody");
       q.series.forEach(function (s) {
-        var m = per[s.label], allt = 0, any = false;
-        for (var y in m) { allt += m[y]; any = true; }
         var tr = el("tr");
         tr.appendChild(el("th", { "class": "site", text: s.label }));
-        tr.appendChild(cell(m[cur] != null ? m[cur] : null));
-        tr.appendChild(el("td", { "class": "num total" }, fmt(any ? allt : null)));
+        if (pct) {
+          var ly = latest(per[s.label]);
+          tr.appendChild(el("td", { "class": "num",
+            text: ly != null ? (Math.round(per[s.label][ly] * 10) / 10) + "%" : "·" }));
+          tr.appendChild(el("td", { "class": "num total" },
+            fmt(ly != null && cnt[s.label][ly] != null ? Math.round(cnt[s.label][ly]) : null)));
+        } else {
+          var m = per[s.label], allt = 0, any = false;
+          for (var y in m) { allt += m[y]; any = true; }
+          tr.appendChild(cell(m[cur] != null ? m[cur] : null));
+          tr.appendChild(el("td", { "class": "num total" }, fmt(any ? allt : null)));
+        }
         tb.appendChild(tr);
       });
       table.appendChild(tb);
@@ -529,7 +570,8 @@
       });
       var w = host.clientWidth || result.clientWidth || 800;
       var u = new uPlot({ width: w, height: 300, scales: { x: { time: true } }, series: series,
-                          axes: [ {}, { size: 60, values: function (u, v) { return v.map(abbrev); } } ] },
+                          axes: [ {}, { size: 60, values: function (u, v) {
+                            return v.map(pct ? function (x) { return x + "%"; } : abbrev); } } ] },
                         data, host);
       window.addEventListener("resize", function () {
         u.setSize({ width: host.clientWidth || w, height: 300 });

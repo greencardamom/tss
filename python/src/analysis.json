@@ -1,5 +1,5 @@
 {
-  "_doc": "Analysis house: curated cross-dataset questions. Each question has 'series' shown SIDE-BY-SIDE (never silently summed). A series' value is the sum of its 'parts' ([source, metric]). Answered client-side from /series (_all, yearly). q/note are i18n keys.",
+  "_doc": "Analysis house: curated cross-dataset questions. Each question has 'series' shown SIDE-BY-SIDE (never silently summed). A flow series' value is the sum of its 'parts' ([source, metric]). A ratio series (op:'ratio') is (sum(num) + num_const) / sum(den) * (scale|100) per year; set the question's 'unit':'percent' so the card renders levels (Latest % + Count) instead of a meaningless all-time sum. Answered client-side from /series (_all, yearly). q/note are i18n keys.",
   "questions": [
     {
       "id": "deadlinks_fixed",
@@ -57,6 +57,75 @@
             [
               "booksup",
               "gadget_urls"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "footprint",
+      "q": "analysis.footprint.q",
+      "note": "analysis.footprint.note",
+      "unit": "percent",
+      "series": [
+        {
+          "label": "Articles with a Wayback link",
+          "op": "ratio",
+          "num": [
+            [
+              "numberofurl",
+              "pageswaybackurls"
+            ]
+          ],
+          "den": [
+            [
+              "numberofurl",
+              "pages"
+            ]
+          ]
+        },
+        {
+          "label": "Articles with a non-Wayback archive",
+          "op": "ratio",
+          "num": [
+            [
+              "numberofurl",
+              "pagesarchivetodayurls"
+            ],
+            [
+              "numberofurl",
+              "pageswebciteurls"
+            ]
+          ],
+          "num_const": 216000,
+          "den": [
+            [
+              "numberofurl",
+              "pages"
+            ]
+          ]
+        },
+        {
+          "label": "External links archived",
+          "op": "ratio",
+          "num": [
+            [
+              "numberofurl",
+              "waybackurls"
+            ],
+            [
+              "numberofurl",
+              "archivetodayurls"
+            ],
+            [
+              "numberofurl",
+              "webciteurls"
+            ]
+          ],
+          "den": [
+            [
+              "numberofurl",
+              "urls"
             ]
           ]
         }
