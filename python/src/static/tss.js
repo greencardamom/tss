@@ -134,8 +134,14 @@
     // Tables (metrics) — multi-select
     var grp = curGroup();
     var mets = grp ? grp.metrics : [];
-    if (!state.metrics.length && mets.length)
-      state.metrics = mets.map(function (m) { return m.slug; });
+    var allSlugs = mets.map(function (m) { return m.slug; });
+    // Always render in GROUP order: keep the current selection but reorder it to the
+    // group's metric order (a stale ?metrics= permalink can be out of order). Fall
+    // back to all metrics if the selection doesn't match this group.
+    var sel = state.metrics.length
+      ? allSlugs.filter(function (s) { return state.metrics.indexOf(s) >= 0; })
+      : allSlugs.slice();
+    state.metrics = sel.length ? sel : allSlugs.slice();
     if (mets.length > 1) {               // one-metric groups (e.g. each eventstreams table) need no TABLES picker
       var box = el("div", { "class": "checks" });
       mets.forEach(function (m) {
