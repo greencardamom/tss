@@ -42,6 +42,7 @@
   "group.arcstat_media": "Media (archive.org /details/)",
 
   "metric.eventstreams.iabot_wayback": "Wayback links added by IABot",
+  "desc.eventstreams.iabot_wayback": "Number of Wayback links added by IABot via the MediaWiki EventStream API. Data is approximate. For precise numbers see the source 'InternetArchiveBot API'.",
   "metric.eventstreams.user_wayback": "Wayback links added by Users",
   "metric.eventstreams.otherbot_wayback": "Wayback links added by User Bots",
   "metric.eventstreams.iabot_details": "LAMP",
