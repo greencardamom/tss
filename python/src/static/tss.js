@@ -247,10 +247,13 @@
     });
     Promise.all(jobs).then(function (grids) {
       status.textContent = "";
+      // source-level description: shown ONCE at the top of the results
+      var srcDesc = t("desc." + grp.source, "");
+      if (srcDesc) result.appendChild(el("div", { "class": "caption source-caption", html: srcDesc }));
       grids.forEach(function (g) {
         var block = el("div", { "class": "block" });
-        // caption: per-metric desc if present, else the source-level desc (trusted HTML)
-        var desc = t("desc." + g.source + "." + g.metric, t("desc." + g.source, ""));
+        // per-table caption (trusted HTML), only when a metric-specific desc exists
+        var desc = t("desc." + g.source + "." + g.metric, "");
         if (desc) block.appendChild(el("div", { "class": "caption", html: desc }));
         var head = el("h2", {}, el("span", { text:
           t("metric." + g.source + "." + g.metric, g.label || g.metric) }));
