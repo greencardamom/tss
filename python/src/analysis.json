@@ -6,10 +6,60 @@
       "q": "analysis.deadlinks_fixed.q",
       "note": "analysis.deadlinks_fixed.note",
       "series": [
-        { "label": "InternetArchiveBot",
-          "parts": [["iabotapi", "dead_links"]] },
-        { "label": "WaybackMedic",
-          "parts": [["medic_enwiki", "archives_added"], ["medic_enwiki", "links_moved"]] }
+        {
+          "label": "InternetArchiveBot",
+          "parts": [
+            [
+              "iabotapi",
+              "dead_links"
+            ]
+          ]
+        },
+        {
+          "label": "WaybackMedic",
+          "parts": [
+            [
+              "medic_enwiki",
+              "archives_added"
+            ],
+            [
+              "medic_enwiki",
+              "links_moved"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "books_journals",
+      "q": "analysis.books_journals.q",
+      "note": "analysis.books_journals.note",
+      "series": [
+        {
+          "label": "Books & journals (all tools)",
+          "parts": [
+            [
+              "eventstreams",
+              "iabot_details"
+            ],
+            [
+              "eventstreams",
+              "iabot_sim"
+            ],
+            [
+              "eventstreams",
+              "other_details"
+            ],
+            [
+              "booksup",
+              "webtool_urls"
+            ],
+            [
+              "booksup",
+              "gadget_urls"
+            ]
+          ]
+        }
       ]
     }
   ]
