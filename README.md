@@ -2,39 +2,26 @@
 
 A multi-source time-series data platform on Toolforge. Applications ("sources")
 POST raw measurements ("events") to a write API; the server rolls them up into
-Day / Month / Year summaries that drive graphs. Rollups are kept forever; old
-raw events can be archived and pruned (the `event` table is partitioned by year
-for this — the export-to-Parquet+drop job is planned, not yet built).
+Day / Month / Year summaries that drive graphs. 
 
 Live URL: `https://tss.toolforge.org` — API under `/api/v1`.
 
 Sources are named after the API/service the data comes from:
-- **eventstreams** — Wayback/archive.org links added across Wikimedia projects,
-  observed via Wikimedia EventStreams (all actors; imperfect; 2020→), fed live
-  from the pipeline running on the host `acre`.
-- **booksup** — daily BooksUp usage counts, pulled from BooksUp's published JSONL.
-- **iabotapi** — authoritative per-wiki daily IABot activity from IABot's own
-  statistics API (bot-only; 2015→).
+- **iabotapi** — authoritative per-wiki daily IABot activity pulled daily from IABot's own
+  statistics API (2015→).
+- **eventstreams** — Links added across Wikimedia projects,
+  observed via Wikimedia EventStreams and fed live. Comprises 6 datasets (2019→).
+- **booksup** — daily BooksUp usage counts, pulled daily from BooksUp's statistics API (2026→).
 - **medic_iabotdb** — WaybackMedic's edits to the IABot DB (archive add/modify/
-  delete + URL status changes), from medic's `iabget.done` logs on host `rabbit`
-  (global; 2017→).
-- **medic_enwiki** — WaybackMedic's dead-link repairs on English Wikipedia (links
-  moved to new URLs, archive URLs added, url-status flips, pages edited), computed
-  from each `meta/<name>.<range>/` project's logs on host `rabbit` (global; 2015→).
-- **arcstat** — archive-URL *inventory* across wikis: per-site snapshots of how many
-  wayback/alt-archive/archive.is/webcite links, pages-with-each, and archive.org media
-  items each Wikipedia holds. The first **gauge** source (levels, not work-per-period),
-  from `quepasa:~/toolforge/arcstat/db/master.db` (per-wiki; 2019→).
-- **numberofurl** — external-URL *inventory* across **all** Wikimedia wikis (~850):
-  per-site total/unique/pages-with for all-external, Internet Archive, Wayback,
-  Archive.today, WebCite. Also a **gauge**, read from the Commons tabular page
-  `Data:Wikipedia_statistics/exturls.tab` (revisions backfill + acre's local
-  `datau.tab` going forward); monthly since Oct 2025.
+  delete + URL status changes) from medic's logs (2017→).
+- **medic_enwiki** — WaybackMedic's dead-link repairs on English Wikipedia, computed
+  from medic's logs (2015→).
+- **arcstat** — archive-URL *inventory* per-site (~66 largest) monthly (2019→).
+- **numberofurl** — archive-URL *inventory* across **all** Wikimedia wikis (~850) monthly since (Oct 2025→).
 
 ---
 
 ## Contents
-- [Architecture](#architecture)
 - [Repo layout](#repo-layout)
 - [Data model](#data-model)
 - [API (v1)](#api-v1)
@@ -43,34 +30,6 @@ Sources are named after the API/service the data comes from:
 - [Cron jobs / scheduled jobs](#cron-jobs--scheduled-jobs)
 - [Operations](#operations)
 - [Gotchas](#gotchas)
-
----
-
-## Architecture
-
-```
-                    acre (the EventStream host)                 Toolforge
-  ┌─────────────────────────────────────────────┐   ┌──────────────────────────────┐
-  │ iabw-stream.csh → transform.awk → db/YYYY/*.txt│  │  tss webservice (Flask, py3.11)│
-  │                          │                     │   │     /api/v1  ──────►  ToolsDB │
-  │   upload_outbox_iabw.py  │ (cron, every 15m)   │   │                       s…__tss │
-  │   tails new rows ────────┼──── POST /events ───┼──►│  (source/metric/event/rollup) │
-  └─────────────────────────────────────────────┘   │            ▲                  │
-                                                      │            │ POST /events     │
-  BooksUp (another Toolforge tool)                    │  pull_booksup.py (daily job)  │
-    publishes booksup-stats-<year>.jsonl ─────────────┼──── reads local file ─────────┘
-                                                      │  monitor-tss (hourly job) → email on stale
-                                                      └──────────────────────────────┘
-```
-
-- **Producers only ever POST raw events.** The server computes all rollups.
-- **Idempotent ingest:** every event has an `ext_key`; re-POSTing updates in
-  place (never double-counts), so retries/replays are safe.
-- **Hardened HTTP** (`loaders/tss_http.py`): escalating backoff on 429/503/
-  gateway/empty/truncated responses; 4xx is fatal (surfaced, never hammered).
-- **Where things run:** the webservice + the BooksUp pull + freshness monitor run
-  on Toolforge; the IABW backfill + live uploader run on `acre` (where the db
-  files live).
 
 ---
 
@@ -188,7 +147,7 @@ from the read API — it reads nothing source-specific in code, so new sources/m
 appear automatically.
 
 - **Two houses**, derived from `value_type`: **Activity** (flow — work by tools/bots)
-  vs **Inventory** (gauge — URL state on the wikis). A source is Inventory iff *all*
+  vs **Inventory** (gauge — URL state on the wikis). A source is Inventory if *all*
   its metrics are gauges.
 - **Control panel → Go → result below.** Pick house → source → tables (metrics,
   multi-select) → grain (D/M/Y) → display (grid | chart), plus a single-wiki filter and
@@ -206,8 +165,7 @@ appear automatically.
 - Backed by `GET /catalog` (control panel) + `GET /grid` (the matrix).
 
 **Not yet:** the dashboard is currently **unauthenticated** (it reads the already-public
-API) — gating it behind login/Wikimedia OAuth, and adding `fr`/`de` catalogs, are the
-next layers.
+API) — gating it behind login/Wikimedia OAuth, and adding `fr`/`de` catalogs, are future layers.
 
 ---
 
@@ -322,9 +280,8 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 30 4 * * * /home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1
 # numberofurl external-URL inventory (gauge) daily check (Commons .tab -> TSS)
 0 5 * * * /home/greenc/repos/gh/tss/loaders/pull_numberofurl.py >> /home/greenc/numberofurl.log 2>&1
+
 ```
-(On acre the live crontab uses tcsh redirect `>>&`; the lines above are shown in
-bash syntax for portability.)
 The uploader holds a PID lockfile so runs never overlap.
 
 ### Toolforge — scheduled jobs (`toolforge jobs run`, as the `tss` tool)
@@ -364,6 +321,7 @@ To change the eventstreams staleness threshold X, recreate `monitor-tss` with
   backfill or whenever rollups need a full recompute.
 - `iabotapi-backfill` — full 2015→present history load (paced ~28 min, resumable
   via `~/.tss_iabotapi.state`, rollups deferred). Run once, then `rebuild-iabotapi`:
+
   ```bash
   toolforge jobs run iabotapi-backfill --image python3.11 --mount all --emails onfailure \
     --command 'python3 $HOME/www/loaders/pull_iabotapi.py --backfill >> $HOME/iabotapi_backfill.log 2>&1'
@@ -485,7 +443,7 @@ Ongoing: the daily acre cron (above) runs `pull_arcstat.py` with no flags — po
 
 ### numberofurl (gauge, from Commons)
 
-External-URL **inventory** across ~850 Wikimedia wikis — a gauge like arcstat, but the
+URL **inventory** across ~850 Wikimedia wikis — a gauge like arcstat, but the
 data is a Commons **tabular** page, `Data:Wikipedia_statistics/exturls.tab` (a JSON
 object: `schema.fields` + `data` rows), regenerated ~monthly (the 15th) by the
 numberofurl bot on acre, which also drops a local copy at
@@ -496,7 +454,7 @@ The `total.*` rows are aggregates and are **skipped** (TSS computes `_all`).
 
 Reads of a *main* WMF API (commons.wikimedia.org) require a policy User-Agent or you
 get HTTP 403 — handled by `loaders/tss_wiki.py` (policy UA + escalating `maxlag`,
-ported from bup's `wiki.py`). The Cloud services (iabot/booksup) don't need this.
+ported from bup's `wiki.py`). 
 
 **uniq\* caveat (5 metrics).** Per-site `uniq*` = unique-within-that-wiki (correct).
 But unique counts **don't sum across wikis** (the same URL recurs on many), so the
