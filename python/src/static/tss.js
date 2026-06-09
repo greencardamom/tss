@@ -505,18 +505,26 @@
       var per = {}, cnt = {};
       q.series.forEach(function (s) {
         per[s.label] = {}; cnt[s.label] = {};
-        years.forEach(function (y) {
-          if (s.op === "ratio") {
-            var dv = den[s.label][y];
-            if (dv) {
-              var nv = (num[s.label][y] || 0) + (s.num_const || 0);
-              per[s.label][y] = nv / dv * (s.scale || 100);
-              cnt[s.label][y] = nv;
+        if (s.op === "delta") {
+          // year-over-year change of a gauge: this year's level minus the
+          // previous year that has data (first data-year has no delta).
+          var sm = sum[s.label];
+          var ys = years.filter(function (y) { return y in sm; });
+          ys.forEach(function (y, k) { if (k > 0) per[s.label][y] = sm[y] - sm[ys[k - 1]]; });
+        } else {
+          years.forEach(function (y) {
+            if (s.op === "ratio") {
+              var dv = den[s.label][y];
+              if (dv) {
+                var nv = (num[s.label][y] || 0) + (s.num_const || 0);
+                per[s.label][y] = nv / dv * (s.scale || 100);
+                cnt[s.label][y] = nv;
+              }
+            } else if (y in sum[s.label]) {
+              per[s.label][y] = sum[s.label][y];
             }
-          } else if (y in sum[s.label]) {
-            per[s.label][y] = sum[s.label][y];
-          }
-        });
+          });
+        }
       });
       function latest(m) {
         for (var i = years.length - 1; i >= 0; i--) if (m[years[i]] != null) return years[i];
