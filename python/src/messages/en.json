@@ -1,6 +1,6 @@
 {
   "ui.title": "Tarb Stats Server",
-  "ui.subtitle": "A Time Series Store for Wikipedia",
+  "ui.subtitle": "A Time Series Store for web-archive stats on Wikipedia",
   "ui.go": "Go",
   "ui.loading": "Loading…",
   "ui.no_data": "no data",

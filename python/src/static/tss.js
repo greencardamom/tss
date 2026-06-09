@@ -10,6 +10,14 @@
     return (I[key] != null) ? I[key] : (fallback != null ? fallback : key);
   }
   function fmt(v) { return (v == null) ? "" : nf.format(v); }
+  function abbrev(n) {                    // compact axis ticks: 600k, 1.5M, 2B
+    if (n == null) return "";
+    var a = Math.abs(n);
+    if (a >= 1e9) return +(n / 1e9).toFixed(1) + "B";
+    if (a >= 1e6) return +(n / 1e6).toFixed(1) + "M";
+    if (a >= 1e3) return +(n / 1e3).toFixed(0) + "k";
+    return "" + n;
+  }
   function el(tag, attrs) {
     var e = document.createElement(tag), a = attrs || {};
     for (var k in a) {
@@ -414,7 +422,10 @@
     }));
     var w = host.clientWidth || (host.parentNode && host.parentNode.clientWidth) || 800;
     var u = new uPlot({ width: w, height: 340, scales: { x: { time: true } },
-                       series: series }, data, host);
+                       series: series,
+                       axes: [ {}, { size: 60,   // wider gutter; abbreviated ticks (no clipping)
+                                     values: function (u, vals) { return vals.map(abbrev); } } ] },
+                      data, host);
     window.addEventListener("resize", function () {
       u.setSize({ width: host.clientWidth || w, height: 340 });
     });
