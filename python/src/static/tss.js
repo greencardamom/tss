@@ -125,7 +125,7 @@
     var groups = groupsIn(state.house);
     var have = groups.some(function (g) { return g.id === state.group; });
     if ((!state.group || !have) && groups.length) {
-      var prefer = state.house === "activity" ? "es_iabot_wayback" : "arcstat_links";
+      var prefer = state.house === "activity" ? "iabotapi" : "arcstat_links";
       var p = groups.filter(function (g) { return g.id === prefer; })[0];
       state.group = (p || groups[0]).id;
     }
@@ -261,8 +261,8 @@
     });
     Promise.all(jobs).then(function (grids) {
       status.textContent = "";
-      // source-level description: shown ONCE at the top of the results
-      var srcDesc = t("desc." + grp.source, "");
+      // top-of-results description: group-specific if defined, else source-level
+      var srcDesc = t("desc.group." + grp.id, t("desc." + grp.source, ""));
       if (srcDesc) result.appendChild(el("div", { "class": "caption source-caption", html: srcDesc }));
       grids.forEach(function (g) {
         var block = el("div", { "class": "block" });
