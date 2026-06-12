@@ -35,7 +35,7 @@ import tss_http
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
 SRC_DIR_DEFAULT = "/data/project/bup/www/static"
 URL_BASE_DEFAULT = "https://tools-static.wmflabs.org/bup"
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token_booksup")
+TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token_booksup")
 
 # BooksUp record group.field -> TSS metric slug. (urls_added is derived =
 # webtool.urls + gadget.urls, so it is NOT stored; computed on read instead.)
@@ -173,7 +173,7 @@ def main():
 
     token = resolve_token(args)
     if not token:
-        ap.error("no booksup token (--token, --token-file, ~/.tss_token_booksup, "
+        ap.error("no booksup token (--token, --token-file, ~/.config/tss/token_booksup, "
                  "or $TSS_BOOKSUP_TOKEN)")
 
     # Load deferred, then one fast set-based rebuild (booksup data is tiny).

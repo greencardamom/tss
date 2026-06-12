@@ -91,17 +91,17 @@ def main():
     ap.add_argument("--years", help="e.g. 2020-2024 or 2021,2023 (default: all found)")
     ap.add_argument("--batch-size", type=int, default=1000)
     ap.add_argument("--state",
-                    default=os.path.expanduser("~/.tss_backfill_iabw.state"),
+                    default=os.path.expanduser("~/.config/tss/backfill_iabw.state"),
                     help="progress file for resume (empty string to disable)")
     ap.add_argument("--dry-run", action="store_true",
                     help="parse and count only; do not POST")
     args = ap.parse_args()
 
-    # --token, then --token-file, then $TSS_TOKEN, then ~/.tss_token
+    # --token, then --token-file, then $TSS_TOKEN, then ~/.config/tss/token
     token = tss_token.resolve(args.token, args.token_file)
     if not args.dry_run and not token:
         ap.error("no write token (--token, --token-file, $TSS_TOKEN, or "
-                 "~/.tss_token); or use --dry-run")
+                 "~/.config/tss/token); or use --dry-run")
 
     years = parse_years(args.years)
     if years is None:

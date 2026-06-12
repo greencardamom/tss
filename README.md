@@ -61,7 +61,7 @@ python/src/               (served by the webservice; DB scripts run as py3.11 jo
   requirements.txt        pinned to the Toolforge python3.11 runtime
 loaders/                  (clients/adapters; stdlib only)
   tss_http.py             shared hardened POST-with-retry helper
-  tss_token.py            token resolution (--token / --token-file / env / ~/.tss_token)
+  tss_token.py            token resolution (--token / --token-file / env / ~/.config/tss/token)
   iabw_parse.py           shared IABW db-file parser (heals NUL corruption)
   backfill_iabw.py        one-time IABW history load (run on acre)
   upload_outbox_iabw.py   live IABW uploader: byte-offset tail of db files (acre cron)
@@ -197,24 +197,25 @@ toolforge jobs run venvbuild --image python3.11 --mount all --wait \
 
 ### 4. Issue write tokens (store only the hash in the DB; plaintext in a 600 file)
 ```bash
+mkdir -p ~/.config/tss && chmod 700 ~/.config/tss   # all tokens + loader state live here
 # eventstreams — token also needed on acre (see step 7)
 TOK=$(python3 -c "import secrets;print(secrets.token_hex(32))")
 $MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut -d' ' -f1)' WHERE slug='eventstreams';"
-printf %s "$TOK" > ~/.tss_token; chmod 600 ~/.tss_token
+printf %s "$TOK" > ~/.config/tss/token; chmod 600 ~/.config/tss/token
 
 # booksup — used by the pull job on Toolforge
 TOK=$(python3 -c "import secrets;print(secrets.token_hex(32))")
 $MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut -d' ' -f1)' WHERE slug='booksup';"
-printf %s "$TOK" > ~/.tss_token_booksup; chmod 600 ~/.tss_token_booksup
+printf %s "$TOK" > ~/.config/tss/token_booksup; chmod 600 ~/.config/tss/token_booksup
 
 # iabotapi — used by the pull job on Toolforge
 TOK=$(python3 -c "import secrets;print(secrets.token_hex(32))")
 $MY "$DB" -e "UPDATE source SET api_token_hash='$(printf %s "$TOK"|sha256sum|cut -d' ' -f1)' WHERE slug='iabotapi';"
-printf %s "$TOK" > ~/.tss_token_iabotapi; chmod 600 ~/.tss_token_iabotapi
+printf %s "$TOK" > ~/.config/tss/token_iabotapi; chmod 600 ~/.config/tss/token_iabotapi
 ```
 
 The medic sources (`medic_iabotdb`, `medic_enwiki`) are loaded from `acre`, so their
-tokens live there too (issue on Toolforge, copy down to `~/.tss_token_medic_*` on acre,
+tokens live there too (issue on Toolforge, copy down to `~/.config/tss/token_medic_*` on acre,
 mode 600 — same pattern as eventstreams in step 6/7).
 
 ### 5. Start the webservice
@@ -227,7 +228,7 @@ curl https://tss.toolforge.org/api/v1/health     # {"status":"ok"}
 ### 6. Backfill eventstreams history (on `acre`), then rebuild rollups (Toolforge)
 ```bash
 # on acre — copy the eventstreams token down, then load all history
-ssh tools 'become tss cat /data/project/tss/.tss_token' > ~/.tss_token; chmod 600 ~/.tss_token
+ssh tools 'become tss cat /data/project/tss/.config/tss/token' > ~/.config/tss/token; chmod 600 ~/.config/tss/token
 cd /home/greenc/repos/gh/tss
 ./loaders/backfill_iabw.py            # ~31M events; resumable + idempotent
                                       # (the *_iabw loaders feed the 'eventstreams'
@@ -244,7 +245,7 @@ cd /home/greenc/repos/gh/tss
 ./loaders/upload_outbox_iabw.py --init     # seed byte-offsets to current file sizes
 # re-tail TODAY's file so rows added after the backfill snapshot aren't skipped
 # (replace 158 with today's day-of-year):
-python3 -c "import json,os;f=os.path.expanduser('~/.tss_outbox_iabw.state');d=json.load(open(f));d['offsets']['2026/158.txt']=0;json.dump(d,open(f,'w'))"
+python3 -c "import json,os;f=os.path.expanduser('~/.config/tss/outbox_iabw.state');d=json.load(open(f));d['offsets']['2026/158.txt']=0;json.dump(d,open(f,'w'))"
 # then add the acre crontab entry from the table below.
 ```
 
@@ -263,7 +264,7 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 
 | Schedule | Command | Purpose |
 |---|---|---|
-| `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1` | Tail new eventstreams rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
+| `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.config/tss/token >> /home/greenc/tss_upload.log 2>&1` | Tail new eventstreams rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
 | `30 3 * * *` | `/home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1` | rsync new iabget.done from rabbit's local disk + ingest newly-completed medic projects. |
 | `45 3 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1` | Compute enwiki-repair stats on rabbit for projects finished in the last 60 days + ingest newly-finished ones. |
 | `30 4 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1` | Daily: re-post arcstat inventory from quepasa's master.db (deferred) + trigger gauge rebuild. Sites update on their own cron throughout the day, often 1+/day. |
@@ -271,7 +272,7 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 
 ```cron
 # TSS uploader — drain new eventstreams rows to TSS, 5 min after each cron-run cycle
-5,20,35,50 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.tss_token >> /home/greenc/tss_upload.log 2>&1
+5,20,35,50 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.config/tss/token >> /home/greenc/tss_upload.log 2>&1
 # WaybackMedic IABot-DB daily sync (rabbit local disk -> TSS)
 30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1
 # WaybackMedic enwiki-repair daily sync (remote compute on rabbit -> TSS)
@@ -320,7 +321,7 @@ To change the eventstreams staleness threshold X, recreate `monitor-tss` with
 - `rebuild-es` / `rebuild-iabotapi` — `--wait` rollup rebuilds; run after a
   backfill or whenever rollups need a full recompute.
 - `iabotapi-backfill` — full 2015→present history load (paced ~28 min, resumable
-  via `~/.tss_iabotapi.state`, rollups deferred). Run once, then `rebuild-iabotapi`:
+  via `~/.config/tss/iabotapi.state`, rollups deferred). Run once, then `rebuild-iabotapi`:
 
   ```bash
   toolforge jobs run iabotapi-backfill --image python3.11 --mount all --emails onfailure \
@@ -353,7 +354,7 @@ toolforge jobs run rebuild-medic --image python3.11 --mount all --wait \
 ```
 Ongoing: the `sync_medic_iabotdb.sh` acre cron (above) pulls a fresh copy from
 rabbit (~1 min), ingests newly-completed projects (the per-project done-set in
-`~/.tss_medic_iabotdb.state` — kept off /beater — skips the rest), and removes its
+`~/.config/tss/medic_iabotdb.state` — kept off /beater — skips the rest), and removes its
 `/beater` scratch dir on exit so nothing stale is left behind. Not
 freshness-monitored (sporadic manual batches would false-alarm). After a manual
 backfill, `rm -rf /beater/medic_metaimp` when done (or just let the next sync clear it).
@@ -398,7 +399,7 @@ toolforge jobs run rebuild-medic-enwiki --image python3.11 --mount all --wait \
 ```
 Ongoing: the `pull_medic_enwiki.py --since-days 60` acre cron (above) recomputes only
 recently-finished projects and posts the new ones (per-project done-set in
-`~/.tss_medic_enwiki.state` skips the rest). Idempotent (`ext_key = <project>:<metric>`)
+`~/.config/tss/medic_enwiki.state` skips the rest). Idempotent (`ext_key = <project>:<metric>`)
 and checkpointed, so a crash/re-run re-reads the fast stream and re-sends nothing.
 Not freshness-monitored (sporadic manual batches would false-alarm).
 
@@ -474,7 +475,7 @@ toolforge jobs run rebuild-numberofurl --image python3.11 --mount all --wait \
   --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/rebuild_rollups.py numberofurl'
 ```
 Ongoing: the daily acre cron runs `pull_numberofurl.py` (no flags) — reads the local
-`datau.tab`, and if its snapshot date isn't already in `~/.tss_numberofurl.state`,
+`datau.tab`, and if its snapshot date isn't already in `~/.config/tss/numberofurl.state`,
 posts it (deferred) + triggers the gauge rebuild. So the daily run is a cheap no-op
 until the monthly file changes. Not freshness-monitored.
 
@@ -500,14 +501,14 @@ toolforge jobs run monitor-once --image python3.11 --mount all --wait \
 ```
 
 **Backfill is resumable:** `backfill_iabw.py` records progress in
-`~/.tss_backfill_iabw.state`; re-running skips finished files. The uploader
-records byte offsets in `~/.tss_outbox_iabw.state`.
+`~/.config/tss/backfill_iabw.state`; re-running skips finished files. The uploader
+records byte offsets in `~/.config/tss/outbox_iabw.state`.
 
-**Tokens:** plaintext lives only in `~/.tss_token` (eventstreams; on both the tss
-tool and acre), `~/.tss_token_booksup` (booksup; tss tool), `~/.tss_token_iabotapi`
-(iabotapi; tss tool), `~/.tss_token_medic_iabotdb` / `~/.tss_token_medic_enwiki`
-(the medic sources; on acre), `~/.tss_token_arcstat` (arcstat; on acre), and
-`~/.tss_token_numberofurl` (numberofurl; on acre), mode 600, never in git. Only the
+**Tokens:** plaintext lives only in `~/.config/tss/token` (eventstreams; on both the tss
+tool and acre), `~/.config/tss/token_booksup` (booksup; tss tool), `~/.config/tss/token_iabotapi`
+(iabotapi; tss tool), `~/.config/tss/token_medic_iabotdb` / `~/.config/tss/token_medic_enwiki`
+(the medic sources; on acre), `~/.config/tss/token_arcstat` (arcstat; on acre), and
+`~/.config/tss/token_numberofurl` (numberofurl; on acre), mode 600, never in git. Only the
 SHA-256 hash is in the DB.
 
 ---
