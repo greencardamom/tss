@@ -77,6 +77,7 @@ loaders/                  (clients/adapters; stdlib only)
                           revisions backfill + local datau.tab forward; dry-run
   tss_wiki.py             MediaWiki API reads for loaders (WMF good citizen): policy
                           User-Agent + escalating maxlag (ported from bup's wiki.py)
+logs/                     acre cron logs (gitignored; only .gitignore is tracked)
 tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
 ```
 
@@ -264,23 +265,23 @@ Two places run scheduled work: **acre** (the host crontab) and **Toolforge**
 
 | Schedule | Command | Purpose |
 |---|---|---|
-| `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.config/tss/token >> /home/greenc/tss_upload.log 2>&1` | Tail new eventstreams rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
-| `30 3 * * *` | `/home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1` | rsync new iabget.done from rabbit's local disk + ingest newly-completed medic projects. |
-| `45 3 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1` | Compute enwiki-repair stats on rabbit for projects finished in the last 60 days + ingest newly-finished ones. |
-| `30 4 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1` | Daily: re-post arcstat inventory from quepasa's master.db (deferred) + trigger gauge rebuild. Sites update on their own cron throughout the day, often 1+/day. |
-| `0 5 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_numberofurl.py >> /home/greenc/numberofurl.log 2>&1` | Daily check: load the new monthly Commons snapshot from acre's `datau.tab` (no-op if that snapshot date is already loaded) + gauge rebuild. |
+| `5,20,35,50 * * * *` | `/home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.config/tss/token >> /home/greenc/repos/gh/tss/logs/tss_upload.log 2>&1` | Tail new eventstreams rows → POST to TSS (live). Runs 5 min after the IABW `cron-run` cycle. |
+| `30 3 * * *` | `/home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/repos/gh/tss/logs/medic_iabotdb.log 2>&1` | rsync new iabget.done from rabbit's local disk + ingest newly-completed medic projects. |
+| `45 3 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/repos/gh/tss/logs/medic_enwiki.log 2>&1` | Compute enwiki-repair stats on rabbit for projects finished in the last 60 days + ingest newly-finished ones. |
+| `30 4 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/repos/gh/tss/logs/arcstat.log 2>&1` | Daily: re-post arcstat inventory from quepasa's master.db (deferred) + trigger gauge rebuild. Sites update on their own cron throughout the day, often 1+/day. |
+| `0 5 * * *` | `/home/greenc/repos/gh/tss/loaders/pull_numberofurl.py >> /home/greenc/repos/gh/tss/logs/numberofurl.log 2>&1` | Daily check: load the new monthly Commons snapshot from acre's `datau.tab` (no-op if that snapshot date is already loaded) + gauge rebuild. |
 
 ```cron
 # TSS uploader — drain new eventstreams rows to TSS, 5 min after each cron-run cycle
-5,20,35,50 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.config/tss/token >> /home/greenc/tss_upload.log 2>&1
+5,20,35,50 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py --token-file /home/greenc/.config/tss/token >> /home/greenc/repos/gh/tss/logs/tss_upload.log 2>&1
 # WaybackMedic IABot-DB daily sync (rabbit local disk -> TSS)
-30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/medic_iabotdb.log 2>&1
+30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >> /home/greenc/repos/gh/tss/logs/medic_iabotdb.log 2>&1
 # WaybackMedic enwiki-repair daily sync (remote compute on rabbit -> TSS)
-45 3 * * * /home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/medic_enwiki.log 2>&1
+45 3 * * * /home/greenc/repos/gh/tss/loaders/pull_medic_enwiki.py --since-days 60 >> /home/greenc/repos/gh/tss/logs/medic_enwiki.log 2>&1
 # arcstat archive-URL inventory (gauge) daily sync (quepasa master.db -> TSS)
-30 4 * * * /home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/arcstat.log 2>&1
+30 4 * * * /home/greenc/repos/gh/tss/loaders/pull_arcstat.py >> /home/greenc/repos/gh/tss/logs/arcstat.log 2>&1
 # numberofurl external-URL inventory (gauge) daily check (Commons .tab -> TSS)
-0 5 * * * /home/greenc/repos/gh/tss/loaders/pull_numberofurl.py >> /home/greenc/numberofurl.log 2>&1
+0 5 * * * /home/greenc/repos/gh/tss/loaders/pull_numberofurl.py >> /home/greenc/repos/gh/tss/logs/numberofurl.log 2>&1
 
 ```
 The uploader holds a PID lockfile so runs never overlap.

@@ -9,7 +9,7 @@ offsets do not advance, the rows sit safely in the db files, and the next run
 resends them. Idempotent (ext_key), so a partial/retried send never doubles.
 
 Run once per invocation; schedule it from cron (every ~15 min, after cron-run):
-  */15 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py >> ~/tss_upload.log 2>&1
+  */15 * * * * /home/greenc/repos/gh/tss/loaders/upload_outbox_iabw.py >> /home/greenc/repos/gh/tss/logs/tss_upload.log 2>&1
 
 First time, AFTER the historical backfill, seed the offsets so it only tails new
 rows instead of re-sending the year:

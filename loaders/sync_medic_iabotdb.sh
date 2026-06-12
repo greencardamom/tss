@@ -16,7 +16,7 @@
 #
 # Idempotent + crash-safe (re-running re-pulls + resends nothing).
 # crontab (acre, tcsh redirect):
-#   30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >>& /home/greenc/medic_iabotdb.log
+#   30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >>& /home/greenc/repos/gh/tss/logs/medic_iabotdb.log
 set -euo pipefail
 
 DEST=/beater/medic_metaimp
