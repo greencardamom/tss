@@ -15,7 +15,7 @@ First time, AFTER the historical backfill, seed the offsets so it only tails new
 rows instead of re-sending the year:
   ./upload_outbox_iabw.py --init
 
-Token resolution: --token, then --token-file, then $TSS_TOKEN, then ~/.tss_token.
+Token resolution: --token, then --token-file, then $TSS_TOKEN, then ~/.config/tss/token.
 Stdlib only; HTTP via the shared hardened tss_http helper.
 """
 import argparse
@@ -30,8 +30,8 @@ import tss_http
 import tss_token
 
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
-STATE_DEFAULT = os.path.expanduser("~/.tss_outbox_iabw.state")
-LOCK_DEFAULT = os.path.expanduser("~/.tss_outbox_iabw.lock")
+STATE_DEFAULT = os.path.expanduser("~/.config/tss/outbox_iabw.state")
+LOCK_DEFAULT = os.path.expanduser("~/.config/tss/outbox_iabw.lock")
 
 
 # --- state / lock ----------------------------------------------------------
@@ -157,7 +157,7 @@ def main():
 
     token = tss_token.resolve(args.token, args.token_file)
     if not token:
-        ap.error("no write token (--token, --token-file, $TSS_TOKEN, or ~/.tss_token)")
+        ap.error("no write token (--token, --token-file, $TSS_TOKEN, or ~/.config/tss/token)")
 
     url = f"{args.api}/events"  # live path: rollups updated (no defer)
     sent_files = sent_events = 0

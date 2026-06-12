@@ -44,10 +44,10 @@ Modes:
                days (cron: skip re-grepping all history each night). Backfill omits it.
 
 Idempotent (ext_key = "<project>:<metric>"); checkpointed per project in
-~/.tss_medic_enwiki.state so a crash/re-run re-reads the (fast) stream and re-sends
+~/.config/tss/medic_enwiki.state so a crash/re-run re-reads the (fast) stream and re-sends
 nothing. Remote cmds kept tcsh-safe (rabbit's login shell is tcsh; we pipe the
 script to `bash -s` so tcsh never parses it). Stdlib only.
-Token: --token / --token-file / ~/.tss_token_medic_enwiki / $TSS_MEDIC_ENWIKI_TOKEN.
+Token: --token / --token-file / ~/.config/tss/token_medic_enwiki / $TSS_MEDIC_ENWIKI_TOKEN.
 """
 import argparse
 import os
@@ -62,8 +62,8 @@ import tss_http
 HOST = "rabbit"   # VirtualBox HOST; medic's files live on its LOCAL disk.
 META = "/home/greenc/sharedNFS/medic/meta"   # rabbit-local path
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token_medic_enwiki")
-STATE_DEFAULT = os.path.expanduser("~/.tss_medic_enwiki.state")
+TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token_medic_enwiki")
+STATE_DEFAULT = os.path.expanduser("~/.config/tss/medic_enwiki.state")
 
 METRICS = ("pages_edited", "archives_added", "status_to_live",
            "status_to_dead", "links_moved")
@@ -196,7 +196,7 @@ def main():
 
     token = resolve_token(args)
     if not token and not args.dry_run:
-        ap.error("no token (--token, --token-file, ~/.tss_token_medic_enwiki, "
+        ap.error("no token (--token, --token-file, ~/.config/tss/token_medic_enwiki, "
                  "or $TSS_MEDIC_ENWIKI_TOKEN)")
 
     since_arg = ""

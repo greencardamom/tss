@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 #
 # Shared write-token resolution for the acre-side TSS tools.
-# Order: explicit --token, then --token-file, then $TSS_TOKEN, then ~/.tss_token.
-# Keeping the token in ~/.tss_token (chmod 600) avoids putting it on the command
+# Order: explicit --token, then --token-file, then $TSS_TOKEN, then ~/.config/tss/token.
+# Keeping the token in ~/.config/tss/token (chmod 600) avoids putting it on the command
 # line or in crontab.
 
 import os
 
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token")
+TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token")
 
 
 def resolve(token=None, token_file=None):

@@ -32,7 +32,7 @@ Modes:
                each site's latest reading) to eyeball against the dashboard totals;
                POST nothing.
 
-Token: --token / --token-file / ~/.tss_token_arcstat / $TSS_ARCSTAT_TOKEN. Stdlib only.
+Token: --token / --token-file / ~/.config/tss/token_arcstat / $TSS_ARCSTAT_TOKEN. Stdlib only.
 """
 import argparse
 import os
@@ -46,7 +46,7 @@ import tss_http
 HOST = "quepasa"
 REMOTE_FILE = "/home/greenc/toolforge/arcstat/db/master.db"
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token_arcstat")
+TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token_arcstat")
 
 # pipe position (0-based) -> metric slug. content_pages is the standalone leading
 # count, handled separately. Order is append-only in master.db, so position is stable.
@@ -128,7 +128,7 @@ def main():
 
     token = resolve_token(args)
     if not token and not args.dry_run:
-        ap.error("no token (--token, --token-file, ~/.tss_token_arcstat, "
+        ap.error("no token (--token, --token-file, ~/.config/tss/token_arcstat, "
                  "or $TSS_ARCSTAT_TOKEN)")
 
     events = []

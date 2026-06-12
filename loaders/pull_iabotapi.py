@@ -21,7 +21,7 @@ Modes:
 Override the range with --from / --to (YYYY-MM). Idempotent
 (ext_key = "<wiki>:<date>:<metric>"); re-running overwrites in place.
 
-Token: --token, --token-file, ~/.tss_token_iabotapi, or $TSS_IABOTAPI_TOKEN.
+Token: --token, --token-file, ~/.config/tss/token_iabotapi, or $TSS_IABOTAPI_TOKEN.
 Stdlib only.
 """
 import argparse
@@ -34,8 +34,8 @@ import tss_http
 
 IABOT_API = "https://iabot.wmcloud.org/api.php"
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token_iabotapi")
-STATE_DEFAULT = os.path.expanduser("~/.tss_iabotapi.state")
+TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token_iabotapi")
+STATE_DEFAULT = os.path.expanduser("~/.config/tss/iabotapi.state")
 
 # IABot API field -> TSS metric slug. The Total* fields are derived sums and are
 # NOT stored (computed on read), matching the seed.
@@ -195,7 +195,7 @@ def main():
     token = resolve_token(args)
     if not token:
         ap.error("no iabotapi token (--token, --token-file, "
-                 "~/.tss_token_iabotapi, or $TSS_IABOTAPI_TOKEN)")
+                 "~/.config/tss/token_iabotapi, or $TSS_IABOTAPI_TOKEN)")
 
     state_path = args.state if defer else None  # only resume during backfill
     done = load_done(state_path)

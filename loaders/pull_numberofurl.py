@@ -28,7 +28,7 @@ Modes:
 
 GAUGE: only rebuild_source consolidates 'last' correctly; the live recompute path is
 sum-only -> always post ?rollup=defer then rebuild. Idempotent (ext_key =
-"<site>:<date>:<slug>"). Token: --token / --token-file / ~/.tss_token_numberofurl /
+"<site>:<date>:<slug>"). Token: --token / --token-file / ~/.config/tss/token_numberofurl /
 $TSS_NUMBEROFURL_TOKEN. Stdlib only.
 """
 import argparse
@@ -47,8 +47,8 @@ COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 PAGE = "Data:Wikipedia_statistics/exturls.tab"
 MIN_DATE = "2025-10-18"      # first reliable snapshot; earlier revisions are setup churn
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token_numberofurl")
-STATE_DEFAULT = os.path.expanduser("~/.tss_numberofurl.state")
+TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token_numberofurl")
+STATE_DEFAULT = os.path.expanduser("~/.config/tss/numberofurl.state")
 
 _DESC_DATE = re.compile(r"Last update:\s*(.+?)\s*$")
 
@@ -151,7 +151,7 @@ def main():
 
     token = resolve_token(args)
     if not token and not args.dry_run:
-        ap.error("no token (--token, --token-file, ~/.tss_token_numberofurl, "
+        ap.error("no token (--token, --token-file, ~/.config/tss/token_numberofurl, "
                  "or $TSS_NUMBEROFURL_TOKEN)")
     done = load_done(args.state)
 

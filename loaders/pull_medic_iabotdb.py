@@ -34,7 +34,7 @@ Modes:
 
 Idempotent (ext_key = "<IMPID>:<metric>"). Remote read uses `ssh rabbit bash -s`
 (rabbit's login shell is tcsh; piping to bash keeps the script tcsh-safe).
-Token: --token / --token-file / ~/.tss_token_medic_iabotdb / $TSS_MEDIC_IABOTDB_TOKEN.
+Token: --token / --token-file / ~/.config/tss/token_medic_iabotdb / $TSS_MEDIC_IABOTDB_TOKEN.
 Stdlib only.
 """
 import argparse
@@ -54,8 +54,8 @@ HOST = "rabbit"   # VirtualBox HOST; medic's files live on its LOCAL disk.
                   #  VM shared-folder NFS, so read from rabbit directly instead.)
 METAIMP = "/home/greenc/sharedNFS/medic/metaimp"   # rabbit-local path
 API_DEFAULT = "https://tss.toolforge.org/api/v1"
-TOKEN_FILE_DEFAULT = os.path.expanduser("~/.tss_token_medic_iabotdb")
-STATE_DEFAULT = os.path.expanduser("~/.tss_medic_iabotdb.state")
+TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token_medic_iabotdb")
+STATE_DEFAULT = os.path.expanduser("~/.config/tss/medic_iabotdb.state")
 
 STATUS_MAP = {
     "0": "set_dead", "3": "set_alive", "5": "set_paywall",
@@ -268,7 +268,7 @@ def main():
 
     token = resolve_token(args)
     if not token and not args.dry_run:
-        ap.error("no token (--token, --token-file, ~/.tss_token_medic_iabotdb, "
+        ap.error("no token (--token, --token-file, ~/.config/tss/token_medic_iabotdb, "
                  "or $TSS_MEDIC_IABOTDB_TOKEN)")
 
     done = load_done(args.state)

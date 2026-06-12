@@ -8,7 +8,7 @@
 #      shared-folder NFS. Full pull each run (~1 min) — cheap, and avoids leaving a
 #      stale 1.9 GB mirror lying around.
 #   2. ingest with pull_medic_iabotdb.py --local-dir (live rollups). The per-project
-#      done-set in ~/.tss_medic_iabotdb.state (NOT on /beater) skips projects already
+#      done-set in ~/.config/tss/medic_iabotdb.state (NOT on /beater) skips projects already
 #      loaded, so only newly-COMPLETED projects post. A project has no iabget.done
 #      until medic finishes it (3-48h), so it's simply picked up on a later run.
 #   3. clean up: the scratch dir is removed on exit (success OR failure), so /beater
