@@ -77,7 +77,7 @@ loaders/                  (clients/adapters; stdlib only)
                           revisions backfill + local datau.tab forward; dry-run
   tss_wiki.py             MediaWiki API reads for loaders (WMF good citizen): policy
                           User-Agent + escalating maxlag (ported from bup's wiki.py)
-logs/                     acre cron logs (gitignored; only .gitignore is tracked)
+logs/                     cron/job logs on both hosts (gitignored; only .gitignore is tracked)
 tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
 ```
 
@@ -298,17 +298,17 @@ The uploader holds a PID lockfile so runs never overlap.
 # BooksUp daily pull (runs after BooksUp's own midnight stats job)
 toolforge jobs run pull-booksup --image python3.11 --mount all \
   --schedule "0 2 * * *" --emails onfailure \
-  --command 'python3 $HOME/www/loaders/pull_booksup.py >> $HOME/pull_booksup.log 2>&1'
+  --command 'python3 $HOME/www/loaders/pull_booksup.py >> $HOME/www/logs/pull_booksup.log 2>&1'
 
 # IABot API daily pull (recent months, live; paced ~5/min by the adapter)
 toolforge jobs run pull-iabotapi --image python3.11 --mount all \
   --schedule "30 2 * * *" --emails onfailure \
-  --command 'python3 $HOME/www/loaders/pull_iabotapi.py >> $HOME/pull_iabotapi.log 2>&1'
+  --command 'python3 $HOME/www/loaders/pull_iabotapi.py >> $HOME/www/logs/pull_iabotapi.log 2>&1'
 
 # Hourly freshness monitor (uses the venv python — it needs pymysql)
 toolforge jobs run monitor-tss --image python3.11 --mount all \
   --schedule "@hourly" --emails onfailure \
-  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/monitor_tss.py >> $HOME/monitor_tss.log 2>&1'
+  --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/monitor_tss.py >> $HOME/www/logs/monitor_tss.log 2>&1'
 ```
 
 `--emails onfailure` mails the tool's maintainers (registered in toolsadmin) when
@@ -326,7 +326,7 @@ To change the eventstreams staleness threshold X, recreate `monitor-tss` with
 
   ```bash
   toolforge jobs run iabotapi-backfill --image python3.11 --mount all --emails onfailure \
-    --command 'python3 $HOME/www/loaders/pull_iabotapi.py --backfill >> $HOME/iabotapi_backfill.log 2>&1'
+    --command 'python3 $HOME/www/loaders/pull_iabotapi.py --backfill >> $HOME/www/logs/iabotapi_backfill.log 2>&1'
   ```
 
 ### WaybackMedic (medic_iabotdb)
