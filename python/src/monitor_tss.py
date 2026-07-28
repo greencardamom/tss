@@ -17,9 +17,12 @@ Exit codes (1 and 2 both mail via `--emails onfailure`, but mean different thing
   2  MONITOR ERROR - ToolsDB unreachable/erroring, freshness NOT checked (infra,
      not data). Kept distinct so an infra blip is never mistaken for stale data.
 
-Run as a python3.11 job, e.g. hourly:
+Run as a python3.11 job, e.g. hourly. --timeout bounds a wedged run (without it a
+hung query once ran 2h). No --retry on purpose: a STALE exit is deterministic, so
+a k8s retry would just re-run it and double the alert mail; transient DB errors
+are already retried in-process (DB_ATTEMPTS).
   toolforge jobs run monitor-tss --image python3.11 --mount all \
-    --schedule '@hourly' --emails onfailure --timeout 300 --retry 1 \
+    --schedule '@hourly' --emails onfailure --timeout 300 \
     --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/monitor_tss.py'
 """
 import argparse

@@ -306,10 +306,17 @@ toolforge jobs run pull-iabotapi --image python3.11 --mount all \
   --command 'python3 $HOME/www/loaders/pull_iabotapi.py >> $HOME/www/logs/pull_iabotapi.log 2>&1'
 
 # Hourly freshness monitor (uses the venv python — it needs pymysql)
+# --timeout 300 bounds a wedged run: a hung query once ran 2h (see exit codes below).
+# No --retry on purpose — a STALE exit is deterministic, so retrying only doubles the
+# alert mail; transient ToolsDB errors are already retried in-process.
 toolforge jobs run monitor-tss --image python3.11 --mount all \
-  --schedule "@hourly" --emails onfailure \
+  --schedule "@hourly" --emails onfailure --timeout 300 \
   --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/monitor_tss.py >> $HOME/www/logs/monitor_tss.log 2>&1'
 ```
+
+`monitor-tss` exit codes: `0` fresh, `1` STALE (real data alert), `2` MONITOR ERROR
+(ToolsDB unreachable — freshness not checked; infra, not data). It depends on the
+`ix_event_freshness (source_id, created_at)` index — see `sql/schema.sql`.
 
 `--emails onfailure` mails the tool's maintainers (registered in toolsadmin) when
 the command exits non-zero. Failure-email recurs each run while a source stays
