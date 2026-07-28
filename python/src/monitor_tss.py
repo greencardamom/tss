@@ -48,15 +48,23 @@ DB_BACKOFF         = 5      # seconds, multiplied by the attempt number
 EXIT_STALE    = 1
 EXIT_DBERROR  = 2
 
-# MAX(created_at) per source. Written as a correlated subquery (not a LEFT JOIN +
-# GROUP BY over the whole event table) so it uses ix_event_freshness
-# (source_id, created_at) -- one index dive per source instead of a full scan of
-# 37M+ rows. NOW() stays in SQL so age is DB-time throughout (no TZ skew).
+# Last ingest time per source, via ix_event_freshness (source_id, created_at).
+#
+# Three deliberate choices here, each measured on the live 37M-row event table:
+#   1. Correlated subquery per source, NOT "LEFT JOIN event ... GROUP BY slug":
+#      the join form aggregated the whole table (full scan, minutes -> the 2h hang).
+#   2. ORDER BY created_at DESC LIMIT 1, NOT MAX(created_at): inside a dependent
+#      subquery MariaDB does not apply the MIN/MAX optimization, so MAX() still
+#      range-scans every index entry for that source (measured 16.4s and growing
+#      linearly with the table). ORDER BY ... LIMIT 1 is a single backward index
+#      seek -- measured 0.0017s, same results.
+#   3. NOW() stays in SQL so age is DB-time throughout (no Python/DB TZ skew).
 QUERY = (
     "SELECT slug, last_at, TIMESTAMPDIFF(MINUTE, last_at, NOW()) / 60.0 AS age_h "
     "FROM ( "
     "  SELECT s.slug AS slug, "
-    "         (SELECT MAX(e.created_at) FROM event e WHERE e.source_id = s.source_id) AS last_at "
+    "         (SELECT e.created_at FROM event e WHERE e.source_id = s.source_id "
+    "          ORDER BY e.created_at DESC LIMIT 1) AS last_at "
     "  FROM source s "
     ") t"
 )
