@@ -113,7 +113,12 @@ CREATE TABLE IF NOT EXISTS event (
 
     PRIMARY KEY (event_id, ts),
     UNIQUE KEY uk_event_natural (source_id, ext_key, ts),
-    KEY ix_event_lookup (source_id, metric_id, entity, ts)   -- drill-through reads
+    KEY ix_event_lookup (source_id, metric_id, entity, ts),  -- drill-through reads
+    -- Freshness probe for monitor_tss.py ("last ingest per source"). Required:
+    -- created_at is in no other index, so without this the monitor full-scans the
+    -- whole table every hour (37M rows -> a 2h hang in Jul 2026). With it, the
+    -- per-source "ORDER BY created_at DESC LIMIT 1" is a single backward seek.
+    KEY ix_event_freshness (source_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   PARTITION BY RANGE (YEAR(ts)) (
     PARTITION p2020 VALUES LESS THAN (2021),
