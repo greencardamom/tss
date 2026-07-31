@@ -1,10 +1,11 @@
 {
-  "_doc": "Analysis house: curated cross-dataset questions. Each question has 'series' shown SIDE-BY-SIDE (never silently summed). A flow series' value is the sum of its 'parts' ([source, metric]). A ratio series (op:'ratio') is (sum(num) + num_const) / sum(den) * (scale|100) per year; set the question's 'unit':'percent' so the card renders levels (Latest % + Count) instead of a meaningless all-time sum. A delta series (op:'delta', 'parts') is the year-over-year change of a gauge (this year's summed level minus the prior data-year's). Answered client-side from /series (_all, yearly). q/note are i18n keys.",
+  "_doc": "Analysis house: curated cross-dataset questions. Each question has 'series' shown SIDE-BY-SIDE (never silently summed). A flow series' value is the sum of its 'parts' ([source, metric]). A ratio series (op:'ratio') is (sum(num) + num_const) / sum(den) * (scale|100) per year; set the question's 'unit':'percent' so the card renders levels (Latest % + Count) instead of a meaningless all-time sum. A delta series (op:'delta', 'parts') is the year-over-year change of a gauge (this year's summed level minus the prior data-year's). Set 'combined':true to add an 'All combined' row summing the plain flow series (ratio/delta series are excluded, and percent questions never get one) — only turn it on where the series are genuinely additive, and say so in the note. Answered client-side from /series (_all, yearly). q/note are i18n keys.",
   "questions": [
     {
       "id": "deadlinks_fixed",
       "q": "analysis.deadlinks_fixed.q",
       "note": "analysis.deadlinks_fixed.note",
+      "combined": true,
       "series": [
         {
           "label": "InternetArchiveBot",

@@ -142,7 +142,7 @@
   "ui.latest": "Latest",
   "ui.count": "Count",
   "analysis.deadlinks_fixed.q": "Dead links fixed on Wikipedia (by tool)",
-  "analysis.deadlinks_fixed.note": "Each tool is counted separately, not summed. <b>InternetArchiveBot</b>: dead links it rescued by adding an archive (authoritative bot stats, all wikis). <b>WaybackMedic</b>: dead links fixed on English Wikipedia by adding an archive URL or by rewriting a dead link to a live URL. Scopes differ — IABot is all wikis, WaybackMedic is English Wikipedia. Not shown: WaybackMedic's back-end repair of the IABot database, which is invisible here but lets IABot fix many more links downstream.",
+  "analysis.deadlinks_fixed.note": "Each tool is counted separately; the <b>All combined</b> row adds them up. <b>InternetArchiveBot</b>: dead links it rescued by adding an archive (authoritative bot stats, all wikis). <b>WaybackMedic</b>: dead links fixed on English Wikipedia by adding an archive URL or by rewriting a dead link to a live URL. Scopes differ — IABot is all wikis, WaybackMedic is English Wikipedia — so read the combined figure as the two tools' work added together, not as a single like-for-like measure. Not shown: WaybackMedic's back-end repair of the IABot database, which is invisible here but lets IABot fix many more links downstream.",
   "ui.question": "Question",
   "analysis.books_journals.q": "Book & journal links added (all tools)",
   "analysis.books_journals.note": "Total archive.org/details links for books and journals added across all tools: LAMP bot, added manually by users, and BooksUp tools (website + gadget). The LAMP and user parts are EventStream-observed (under 5% margin of error); BooksUp counts come from its own stats API.",
