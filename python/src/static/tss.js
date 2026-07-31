@@ -531,6 +531,18 @@
         return null;
       }
 
+      // Opt-in combined total ("combined": true), shown as a table row and a
+      // trend line. Only the plain flow series are summed — ratio/delta series
+      // are not additive, so they stay out of it. comb stays null when off.
+      var flows = pct ? [] : q.series.filter(function (s) { return !s.op; });
+      var comb = null;
+      if (q.combined && flows.length > 1) {
+        comb = {};
+        flows.forEach(function (s) {
+          for (var y2 in per[s.label]) comb[y2] = (comb[y2] || 0) + per[s.label][y2];
+        });
+      }
+
       var block = el("div", { "class": "block" });
       block.appendChild(el("h2", {}, el("span", { text: t(q.q, q.id) })));
       var note = t(q.note, "");
@@ -563,19 +575,37 @@
         }
         tb.appendChild(tr);
       });
+      if (comb) {
+        var callt = 0, cany = false;
+        for (var cy in comb) { callt += comb[cy]; cany = true; }
+        var gtr = el("tr", { "class": "grand" });
+        gtr.appendChild(el("th", { "class": "site", text: t("ui.combined") }));
+        gtr.appendChild(cell(comb[cur] != null ? comb[cur] : null));
+        gtr.appendChild(el("td", { "class": "num total" }, fmt(cany ? callt : null)));
+        tb.appendChild(gtr);
+      }
       table.appendChild(tb);
       block.appendChild(el("div", { "class": "tablewrap" }, table));
 
-      // trend: one line per series over the years
+      // trend: one line per series over the years, plus a dashed combined line
+      // last (dashed + neutral so it reads as a derived total, not another tool)
       var host = el("div", {});
       block.appendChild(host);
       var xs = years.map(function (y) { return Date.parse(y + "-01-01T00:00:00Z") / 1000; });
       var data = [xs], series = [{}];
+      function line(m) {
+        return years.map(function (y) { return m[y] != null ? m[y] : null; });
+      }
       q.series.forEach(function (s, i) {
-        data.push(years.map(function (y) { return per[s.label][y] != null ? per[s.label][y] : null; }));
+        data.push(line(per[s.label]));
         series.push({ label: s.label, stroke: PALETTE[i % PALETTE.length], width: 1.8,
                       points: { show: true, size: 4 } });
       });
+      if (comb) {
+        data.push(line(comb));
+        series.push({ label: t("ui.combined"), stroke: "#555", width: 2.2, dash: [6, 3],
+                      points: { show: true, size: 4 } });
+      }
       var w = host.clientWidth || result.clientWidth || 800;
       var u = new uPlot({ width: w, height: 300, scales: { x: { time: true } }, series: series,
                           axes: [ {}, { size: 60, values: function (u, v) {
