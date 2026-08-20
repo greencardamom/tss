@@ -470,7 +470,19 @@
   // --- Analysis: a curated question, its series shown side-by-side -----------
   function renderAnalysis(result, q, status) {
     if (!q) { status.textContent = ""; return; }
-    var qs = "&entity=_all&grain=year&from=2015-01-01&to=2026-12-31&fill=none";
+    // MONTHLY grain so the chart gets 12 points a year instead of 1 and the
+    // current year is visible while it happens -- but only where that is also
+    // CORRECT. A question whose series are all plain flows (work done per period)
+    // sums cleanly by month. Ratio and delta series ride on gauge sources, where
+    // a bucket is the sum of each wiki's *last reading*: the running month is
+    // still half-collected across ~850 wikis, so its total dips and any
+    // month-over-month arithmetic on it is nonsense. Those questions stay yearly,
+    // exactly as before.
+    var monthly = q.series.every(function (s) { return !s.op; });
+    var KL = monthly ? 7 : 4;               // bucket key length: YYYY-MM vs YYYY
+    // No `to`: an end date must be computed or omitted, never hard-coded, or the
+    // view silently truncates the moment the year rolls over.
+    var qs = "&entity=_all&grain=" + (monthly ? "month" : "year") + "&from=2015-01-01";
     var pct = (q.unit === "percent");   // ratio cards render as % (level), not sums
     var jobs = [];
     function fetchPart(p, label, role) {
@@ -488,20 +500,20 @@
     });
     Promise.all(jobs).then(function (ds) {
       status.textContent = "";
-      var num = {}, den = {}, sum = {}, yearset = {};
+      var num = {}, den = {}, sum = {}, keyset = {};
       q.series.forEach(function (s) { num[s.label] = {}; den[s.label] = {}; sum[s.label] = {}; });
       ds.forEach(function (d) {
         (d.points || []).forEach(function (pt) {
-          var y = pt.bucket.slice(0, 4); yearset[y] = 1;
+          var k = pt.bucket.slice(0, KL); keyset[k] = 1;   // "YYYY-MM" or "YYYY"
           var bag = d.__role === "num" ? num : d.__role === "den" ? den : sum;
-          bag[d.__label][y] = (bag[d.__label][y] || 0) + pt.value;
+          bag[d.__label][k] = (bag[d.__label][k] || 0) + pt.value;
         });
       });
-      var years = Object.keys(yearset).sort();
+      var keys = Object.keys(keyset).sort();
       var cur = String(new Date().getUTCFullYear());
 
-      // per[label][y]: value to plot (ratio % for ratio series, summed flow otherwise).
-      // cnt[label][y]: the raw numerator behind a ratio (shown in the Count column).
+      // per[label][k]: value to plot (ratio % for ratio series, summed flow otherwise).
+      // cnt[label][k]: the raw numerator behind a ratio (shown in the Count column).
       var per = {}, cnt = {};
       q.series.forEach(function (s) {
         per[s.label] = {}; cnt[s.label] = {};
@@ -509,26 +521,34 @@
           // year-over-year change of a gauge: this year's level minus the
           // previous year that has data (first data-year has no delta).
           var sm = sum[s.label];
-          var ys = years.filter(function (y) { return y in sm; });
-          ys.forEach(function (y, k) { if (k > 0) per[s.label][y] = sm[y] - sm[ys[k - 1]]; });
+          var ks = keys.filter(function (k) { return k in sm; });
+          ks.forEach(function (k, i) { if (i > 0) per[s.label][k] = sm[k] - sm[ks[i - 1]]; });
         } else {
-          years.forEach(function (y) {
+          keys.forEach(function (k) {
             if (s.op === "ratio") {
-              var dv = den[s.label][y];
+              var dv = den[s.label][k];
               if (dv) {
-                var nv = (num[s.label][y] || 0) + (s.num_const || 0);
-                per[s.label][y] = nv / dv * (s.scale || 100);
-                cnt[s.label][y] = nv;
+                var nv = (num[s.label][k] || 0) + (s.num_const || 0);
+                per[s.label][k] = nv / dv * (s.scale || 100);
+                cnt[s.label][k] = nv;
               }
-            } else if (y in sum[s.label]) {
-              per[s.label][y] = sum[s.label][y];
+            } else if (k in sum[s.label]) {
+              per[s.label][k] = sum[s.label][k];
             }
           });
         }
       });
-      function latest(m) {
-        for (var i = years.length - 1; i >= 0; i--) if (m[years[i]] != null) return years[i];
+      function latest(m) {                 // most recent bucket that has a value
+        for (var i = keys.length - 1; i >= 0; i--) if (m[keys[i]] != null) return keys[i];
         return null;
+      }
+      // The table's columns are calendar years. On a monthly question the values
+      // fold back up (flows sum cleanly); on a yearly one the keys are already
+      // years and this is a pass-through.
+      function byYear(m) {
+        var out = {};
+        for (var k in m) { var y = k.slice(0, 4); out[y] = (out[y] || 0) + m[k]; }
+        return out;
       }
 
       // Opt-in combined total ("combined": true), shown as a table row and a
@@ -539,7 +559,7 @@
       if (q.combined && flows.length > 1) {
         comb = {};
         flows.forEach(function (s) {
-          for (var y2 in per[s.label]) comb[y2] = (comb[y2] || 0) + per[s.label][y2];
+          for (var m2 in per[s.label]) comb[m2] = (comb[m2] || 0) + per[s.label][m2];
         });
       }
 
@@ -568,7 +588,9 @@
           tr.appendChild(el("td", { "class": "num total" },
             fmt(ly != null && cnt[s.label][ly] != null ? Math.round(cnt[s.label][ly]) : null)));
         } else {
-          var m = per[s.label], allt = 0, any = false;
+          // Yearly, and deliberately INCLUDING the current part-month, so the
+          // all-time figure stays a live running total.
+          var m = byYear(per[s.label]), allt = 0, any = false;
           for (var y in m) { allt += m[y]; any = true; }
           tr.appendChild(cell(m[cur] != null ? m[cur] : null));
           tr.appendChild(el("td", { "class": "num total" }, fmt(any ? allt : null)));
@@ -576,35 +598,58 @@
         tb.appendChild(tr);
       });
       if (comb) {
-        var callt = 0, cany = false;
-        for (var cy in comb) { callt += comb[cy]; cany = true; }
+        var cby = byYear(comb), callt = 0, cany = false;
+        for (var cy in cby) { callt += cby[cy]; cany = true; }
         var gtr = el("tr", { "class": "grand" });
         gtr.appendChild(el("th", { "class": "site", text: t("ui.combined") }));
-        gtr.appendChild(cell(comb[cur] != null ? comb[cur] : null));
+        gtr.appendChild(cell(cby[cur] != null ? cby[cur] : null));
         gtr.appendChild(el("td", { "class": "num total" }, fmt(cany ? callt : null)));
         tb.appendChild(gtr);
       }
       table.appendChild(tb);
       block.appendChild(el("div", { "class": "tablewrap" }, table));
 
-      // trend: one line per series over the years, plus a dashed combined line
-      // last (dashed + neutral so it reads as a derived total, not another tool)
+      // trend: one line per series over time, plus a dashed combined line last
+      // (dashed + neutral so it reads as a derived total, not another tool).
       var host = el("div", {});
       block.appendChild(host);
-      var xs = years.map(function (y) { return Date.parse(y + "-01-01T00:00:00Z") / 1000; });
-      var data = [xs], series = [{}];
-      function line(m) {
-        return years.map(function (y) { return m[y] != null ? m[y] : null; });
+      // Monthly questions stop at the last COMPLETE month: the running month is
+      // still filling, so plotting it would drag the right-hand edge down every
+      // month. Yearly questions keep every bucket, as before.
+      var xk = keys;
+      if (monthly) {
+        var n2 = new Date();
+        var cutoff = new Date(Date.UTC(n2.getUTCFullYear(), n2.getUTCMonth() - 1, 1))
+                       .toISOString().slice(0, 7);
+        xk = keys.filter(function (k) { return k <= cutoff; });
       }
+      var xs = xk.map(function (k) {
+        return Date.parse(k + (monthly ? "-01" : "-01-01") + "T00:00:00Z") / 1000;
+      });
+      var data = [xs], series = [{}];
+      // On a monthly line, a gap INSIDE a series' active span means the tool
+      // simply did not run that month, so it plots as 0 and the line stays
+      // unbroken. Gaps before it started (or after it stopped) stay null — that
+      // is absence of data, not a month of no work.
+      function line(m) {
+        var first = null, last = null;
+        xk.forEach(function (k) { if (m[k] != null) { if (first == null) first = k; last = k; } });
+        return xk.map(function (k) {
+          if (m[k] != null) return m[k];
+          return (monthly && first != null && k > first && k < last) ? 0 : null;
+        });
+      }
+      // Points off on monthly: ~120 dots on an 800px canvas smear into a blob.
+      var pt = { show: !monthly, size: 4 };
       q.series.forEach(function (s, i) {
         data.push(line(per[s.label]));
         series.push({ label: s.label, stroke: PALETTE[i % PALETTE.length], width: 1.8,
-                      points: { show: true, size: 4 } });
+                      points: pt });
       });
       if (comb) {
         data.push(line(comb));
         series.push({ label: t("ui.combined"), stroke: "#555", width: 2.2, dash: [6, 3],
-                      points: { show: true, size: 4 } });
+                      points: pt });
       }
       var w = host.clientWidth || result.clientWidth || 800;
       var u = new uPlot({ width: w, height: 300, scales: { x: { time: true } }, series: series,
