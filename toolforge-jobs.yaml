@@ -1,0 +1,48 @@
+# toolforge-jobs.yaml - declarative definition of the tss tool's scheduled jobs.
+#
+# Apply with:   become tss toolforge jobs load $HOME/www/toolforge-jobs.yaml
+#   NOTE: `load` FLUSHES ALL JOBS first, then recreates from this file. Any one-off
+#   job running at the time is killed, so check `toolforge jobs list` before loading.
+# Inspect with: become tss toolforge jobs dump
+#
+# Keeping this in the repo means the job definitions are version-controlled rather than
+# living only as shell history in the README. `dump` reads the live cluster, so if the two
+# ever disagree, reconcile deliberately - do not assume this file is what is running.
+#
+# 2026-09-18 changes:
+#   - monitor-tss: @hourly -> every 4 hours. It alerts on a condition that persists for
+#     hours or days (a stale source), so hourly re-alerting produced ~24 emails/day for one
+#     fault and buried the actionable root-cause email (pull-iabotapi's, which fires once
+#     daily) at a 24:1 ratio. The README already flagged this: "widen the monitor-tss
+#     schedule if that's noisy."
+#   - pull-iabotapi: retry 3. A transient IABot blip previously meant no data until the
+#     next day's 02:30 run. Caveat: retry does NOT help a SUSTAINED outage (the Sep 2026
+#     `disabledinterface` case lasted ~9 days) and costs extra failure events per run while
+#     one is in progress.
+#
+# monitor-tss deliberately has NO retry: a STALE exit is deterministic, so a k8s retry just
+# re-runs it and doubles the alert mail. Transient ToolsDB errors are retried in-process
+# (DB_ATTEMPTS). Do not "fix" that by adding retry here.
+
+- name: monitor-tss
+  command: $HOME/www/python/venv/bin/python $HOME/www/python/src/monitor_tss.py >> $HOME/www/logs/monitor_tss.log 2>&1
+  image: python3.11
+  mount: all
+  schedule: 0 */4 * * *
+  emails: onfailure
+  timeout: 300
+
+- name: pull-booksup
+  command: python3 $HOME/www/loaders/pull_booksup.py >> $HOME/www/logs/pull_booksup.log 2>&1
+  image: python3.11
+  mount: all
+  schedule: 0 2 * * *
+  emails: onfailure
+
+- name: pull-iabotapi
+  command: python3 $HOME/www/loaders/pull_iabotapi.py >> $HOME/www/logs/pull_iabotapi.log 2>&1
+  image: python3.11
+  mount: all
+  schedule: 30 2 * * *
+  emails: onfailure
+  retry: 3
