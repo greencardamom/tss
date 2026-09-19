@@ -291,8 +291,8 @@ The uploader holds a PID lockfile so runs never overlap.
 | Job | Schedule | `--emails` | Purpose |
 |---|---|---|---|
 | `pull-booksup` | `0 2 * * *` | `onfailure` | Pull BooksUp's daily JSONL → TSS. Exits non-zero (→ email) if the source file is missing. |
-| `pull-iabotapi` | `30 2 * * *` | `onfailure` | Pull the recent 2 months from the IABot API → TSS (live). Paced at 5/min. |
-| `monitor-tss` | `@hourly` | `onfailure` | Freshness check; emails if eventstreams stale >6h, or booksup/iabotapi >48h, or a source has no data. |
+| `pull-iabotapi` | `30 2 * * *` | `onfailure` (`--retry 3`) | Pull the recent 2 months from the IABot API → TSS (live). Paced at 5/min. |
+| `monitor-tss` | `0 */4 * * *` | `onfailure` | Freshness check; emails if eventstreams stale >6h, or booksup/iabotapi >48h, or a source has no data. |
 
 ```bash
 # BooksUp daily pull (runs after BooksUp's own midnight stats job)
@@ -302,7 +302,7 @@ toolforge jobs run pull-booksup --image python3.11 --mount all \
 
 # IABot API daily pull (recent months, live; paced ~5/min by the adapter)
 toolforge jobs run pull-iabotapi --image python3.11 --mount all \
-  --schedule "30 2 * * *" --emails onfailure \
+  --schedule "30 2 * * *" --emails onfailure --retry 3 \
   --command 'python3 $HOME/www/loaders/pull_iabotapi.py >> $HOME/www/logs/pull_iabotapi.log 2>&1'
 
 # Hourly freshness monitor (uses the venv python — it needs pymysql)
@@ -310,9 +310,30 @@ toolforge jobs run pull-iabotapi --image python3.11 --mount all \
 # No --retry on purpose — a STALE exit is deterministic, so retrying only doubles the
 # alert mail; transient ToolsDB errors are already retried in-process.
 toolforge jobs run monitor-tss --image python3.11 --mount all \
-  --schedule "@hourly" --emails onfailure --timeout 300 \
+  --schedule "0 */4 * * *" --emails onfailure --timeout 300 \
   --command '$HOME/www/python/venv/bin/python $HOME/www/python/src/monitor_tss.py >> $HOME/www/logs/monitor_tss.log 2>&1'
 ```
+
+### Job definitions are declarative: `toolforge-jobs.yaml`
+
+The three jobs above are defined in `toolforge-jobs.yaml` in this repo. The `toolforge jobs run`
+commands shown are the equivalent one-liners, kept for reference. To apply the file:
+
+```bash
+become tss toolforge jobs load $HOME/www/toolforge-jobs.yaml
+```
+
+`load` **flushes every job first**, then recreates from the file -- so a one-off job running at
+that moment is killed. Check `toolforge jobs list` before loading. `toolforge jobs dump` reads
+the LIVE cluster, so if dump and the file disagree, reconcile deliberately rather than assuming
+the file is what is running.
+
+**2026-09 schedule/retry changes.** `monitor-tss` went `@hourly` -> every 4 hours: it alerts on a
+condition that persists for hours or days, so hourly re-alerting produced ~24 emails/day for one
+fault and buried the actionable root-cause email (`pull-iabotapi`, once daily) at a 24:1 ratio.
+`pull-iabotapi` gained `--retry 3` for transient IABot blips -- note retry does NOT help a
+sustained outage (the Sep 2026 `disabledinterface` case ran ~9 days), and during one it adds
+failure events per run. `monitor-tss` still has no retry, deliberately; see the exit codes below.
 
 `monitor-tss` exit codes: `0` fresh, `1` STALE (real data alert), `2` MONITOR ERROR
 (ToolsDB unreachable — freshness not checked; infra, not data). It depends on the
