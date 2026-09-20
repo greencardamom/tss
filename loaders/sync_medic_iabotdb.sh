@@ -19,7 +19,10 @@
 #   30 3 * * * /home/greenc/repos/gh/tss/loaders/sync_medic_iabotdb.sh >>& /home/greenc/repos/gh/tss/logs/medic_iabotdb.log
 set -euo pipefail
 
-DEST=/beater/medic_metaimp
+# Scratch dir. acre has a dedicated /beater drive for high-churn temp data; hosts
+# without one use $HOME. A full ~1.9GB pull happens each run and is then deleted,
+# so this is real write churn - but trivial for an NVMe (~0.7TB/yr vs 1200 TBW).
+if [ -d /beater ]; then DEST=/beater/medic_metaimp; else DEST="$HOME/.cache/medic_metaimp"; fi
 REPO=/home/greenc/repos/gh/tss
 RABBIT_METAIMP=/home/greenc/sharedNFS/medic/metaimp
 
