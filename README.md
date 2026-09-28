@@ -78,7 +78,7 @@ loaders/                  (clients/adapters; stdlib only)
   tss_wiki.py             MediaWiki API reads for loaders (WMF good citizen): policy
                           User-Agent + escalating maxlag (ported from bup's wiki.py)
 logs/                     cron/job logs on both hosts (gitignored; only .gitignore is tracked)
-tsssave.sh                deploy: commit → push → pull on Toolforge → restart webservice
+tsssave.sh                deploy: copy to acre → acre commits + pushes → pull on Toolforge → restart
 ```
 
 ---

@@ -2,8 +2,8 @@
 #
 # tsssave.sh - one-shot deploy for the tss tool (Tarb Stats Server).
 #
-#   1. commit local changes   (in /home/greenc/repos/gh/tss)
-#   2. push to GitHub (origin/main)
+#   1. copy this staging dir to acre (~/scripts/push_staging_repos.sh tss)
+#   2. acre commits and pushes to GitHub (origin/main) - acre is the only host that pushes
 #   3. git pull on Toolforge  (/data/project/tss/www, via deploy key)
 #   4. webservice restart
 #
@@ -15,9 +15,6 @@
 #
 set -euo pipefail
 
-REPO="/home/greenc/repos/gh/tss"
-cd "$REPO"
-
 PUSHONLY=0
 if [ "${1:-}" = "--pushonly" ]; then
   PUSHONLY=1
@@ -26,16 +23,18 @@ fi
 
 MSG="${*:-tss update $(date '+%Y-%m-%d %H:%M:%S')}"
 
-echo "==> commit"
-if [ -n "$(git status --porcelain)" ]; then
-  git add -A
-  git commit -m "$MSG"
-else
-  echo "    (no local changes to commit)"
-fi
+echo "==> copy to acre"
+/home/greenc/scripts/push_staging_repos.sh tss
 
-echo "==> push to GitHub"
-git push origin main
+echo "==> commit + push to GitHub (on acre)"
+{ printf 'MSG=%q\n' "$MSG"; cat <<'ACRE'
+set -e
+cd /home/greenc/repos/gh/tss
+git add -A
+if git diff --cached --quiet; then echo "    (no changes to commit)"; else git commit -q -m "$MSG"; fi
+git push -q origin main
+ACRE
+} | ssh -o BatchMode=yes -o ConnectTimeout=15 acre bash -s
 
 if [ "$PUSHONLY" -eq 1 ]; then
   echo "==> --pushonly: skipping Toolforge pull/restart"
