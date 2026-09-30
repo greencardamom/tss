@@ -1,8 +1,10 @@
 """Public (no-auth) read endpoints: catalog, series, drill-through."""
+import time
+import config
 import json
 import os
 
-from flask import Blueprint, request, jsonify
+from flask import current_app, Blueprint, request, jsonify
 
 from db import get_db
 
@@ -63,6 +65,52 @@ def _num(v):
 
 
 # --- catalog ---------------------------------------------------------------
+
+
+# Short-lived cache for identical successful reads (per worker). Repeated requests are served
+# without touching ToolsDB; data changes at most every few minutes, so 60 s is not visibly stale.
+_read_cache = {}
+
+
+@bp.before_request
+def _cache_lookup():
+    if request.method != "GET" or config.READ_CACHE_SECONDS <= 0:
+        return None
+    hit = _read_cache.get(request.full_path)
+    if hit and hit[0] > time.monotonic():
+        resp = current_app.response_class(hit[1], status=hit[2], mimetype=hit[3])
+        resp.headers["X-TSS-Cache"] = "hit"
+        return resp
+    return None
+
+
+@bp.after_request
+def _cache_store(resp):
+    if (request.method == "GET" and resp.status_code == 200 and config.READ_CACHE_SECONDS > 0
+            and "X-TSS-Cache" not in resp.headers):
+        now = time.monotonic()
+        if len(_read_cache) >= 512:
+            for k in [k for k, v in _read_cache.items() if v[0] <= now]:
+                del _read_cache[k]
+            while len(_read_cache) >= 512:
+                del _read_cache[min(_read_cache, key=lambda k: _read_cache[k][0])]
+        _read_cache[request.full_path] = (now + config.READ_CACHE_SECONDS, resp.get_data(), resp.status_code, resp.mimetype)
+        resp.headers["X-TSS-Cache"] = "miss"
+    return resp
+
+
+def _bounded_int(name, default, lo, hi):
+    """Parse an integer query arg within [lo, hi]; return (value, error_message)."""
+    raw = request.args.get(name)
+    if raw is None or raw == "":
+        return default, None
+    try:
+        v = int(raw)
+    except ValueError:
+        return None, "%s must be an integer" % name
+    if v < lo or v > hi:
+        return None, "%s must be between %d and %d" % (name, lo, hi)
+    return v, None
 
 @bp.get("/sources")
 def list_sources():
@@ -168,8 +216,12 @@ def events():
     metric = request.args.get("metric")
     entity = request.args.get("entity")
     date = request.args.get("date")
-    page = max(int(request.args.get("page", 1)), 1)
-    limit = min(int(request.args.get("limit", 100)), 1000)
+    page, err = _bounded_int("page", 1, 1, config.MAX_PAGE)
+    if err:
+        return jsonify(error=err), 400
+    limit, err = _bounded_int("limit", 100, 1, 1000)
+    if err:
+        return jsonify(error=err), 400
     offset = (page - 1) * limit
 
     if not (source and metric and date):

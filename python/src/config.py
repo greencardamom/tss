@@ -35,3 +35,9 @@ MAX_BATCH = int(os.environ.get("TSS_MAX_BATCH", "25000"))
 # Optional admin token (plaintext) for the source/metric registration endpoints.
 # Registration can also be done directly via sql/seed.sql, so this is optional.
 ADMIN_TOKEN = os.environ.get("TSS_ADMIN_TOKEN")
+
+# Request/abuse limits. Toolforge hides client IPs (tools see only proxy addresses), so there is no
+# per-IP rate limit; instead bodies are capped, inputs bounded and identical reads cached briefly.
+MAX_BODY_BYTES = int(os.environ.get("TSS_MAX_BODY_MB", "16")) * 1024 * 1024
+READ_CACHE_SECONDS = int(os.environ.get("TSS_READ_CACHE_SECONDS", "60"))
+MAX_PAGE = int(os.environ.get("TSS_MAX_PAGE", "10000"))

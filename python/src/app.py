@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify
 
+import config
 from db import close_db
 from api.read import bp as read_bp
 from api.write import bp as write_bp
@@ -35,6 +36,12 @@ def create_app():
     @app.get(f"{API_PREFIX}/health")
     def health():
         return jsonify(status="ok")
+
+    app.config["MAX_CONTENT_LENGTH"] = config.MAX_BODY_BYTES
+
+    @app.errorhandler(413)
+    def too_large(_e):
+        return jsonify(error="request body too large (max %d MB)" % (config.MAX_BODY_BYTES // 1048576)), 413
 
     @app.errorhandler(404)
     def not_found(_e):
