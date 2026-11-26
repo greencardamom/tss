@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """pull_medic_enwiki.py - WaybackMedic's enwiki dead-link repairs -> TSS (source 'medic_enwiki').
 
-Runs on ACRE. WaybackMedic fixes dead links on English Wikipedia in per-project
-directories under `rabbit:/home/greenc/sharedNFS/medic/meta/<name>.<range>/`. The
-per-project tcsh `stats` script reports several headline numbers; TSS tracks the
-five that matter. Rather than run `stats` (it needs sheep-only softredir rulesets
-+ a per-project arg, and the oldest projects predate `stats` entirely), we compute
-the SAME numbers straight from each project's logs.
+Runs on SLATER (cron 03:50, --since-days 60). WaybackMedic fixes dead links on
+English Wikipedia in per-project directories under
+`rabbit:/home/greenc/sharedNFS/medic/meta/<name>.<range>/`. The per-project tcsh
+`stats` script reports the headline numbers. Rather than run `stats` (it needs
+sheep-only softredir rulesets + a per-project arg, and the oldest projects predate
+`stats` entirely), we compute the SAME numbers straight from each project's logs.
 
 Where the compute happens: ONE `ssh rabbit bash -s` stream runs a tiny script over
 rabbit's LOCAL disk (fast) and returns one compact summary line per project. The
@@ -16,20 +16,44 @@ these same files only via a slow shared-folder NFS — so we read rabbit directl
 the lesson from the iabotapi/iabotdb work.)
 
 Metric  <- file / computation (matches the `stats` script's variables):
-  pages_edited   <- wc -l discovered.orig                         (stats: disci)
-  archives_added <- wc -l newialink + wc -l newaltarch            (stats: nai)
-  status_to_live <- grep -c 'url-status live' urlchanger          (stats: urlsli)
-  status_to_dead <- grep -c 'url-status dead' urlchanger          (stats: urlsdi)
-  links_moved    <- sum of 5 syslog 'urlchanger7.1.NN{A,B,I,H,D}' (stats: convi)
-                    counts; note normal-redirects is [1-9] not [0-9] (the script
-                    comments "Don't count 7.1.0B not redirects").
+  pages_edited        <- wc -l discovered.orig                          (disci)
+  archives_added      <- wc -l newialink + wc -l newaltarch             (nai)
+  archives_proactive  <- newialink rows split on " ---- " with 3+ fields whose
+                         last field holds the tag "proactive" (archive added to a
+                         live link)
+  archives_reactive   <- archives_added - archives_proactive (untagged/old rows +
+                         all newaltarch: archive repairs a dead link)
+  status_to_live      <- grep 'url-status live' urlchanger, MINUS rows ending
+                         urlchanger1.54/1.56 (written by a cs12 make-live, which is
+                         counted in made_live) -> the two add without overlap
+  status_to_dead      <- grep -c 'url-status dead' urlchanger           (urlsdi)
+  links_moved         <- sum of 6 syslog 'urlchanger7.1.NN{A,B,I,H,D,F}' counts
+                         (convi); normal-redirects is [1-9]B not [0-9]B ("Don't
+                         count 7.1.0B not redirects"). PLUS, only for projects
+                         with no 7.1.N<CAPITAL> row, old-form "Redirect found"
+                         moves (syslog, else urlchanger; never both)
+  soft404_resolved    <- grep -Ec 'urlchanger7.1.[0-9]{1,2}(T|S)' syslog (soft404i)
+  made_live           <- syslog lines ending urlchanger5.5/1.51/1.57/2.5/3.2/16.1/6.2
+                                                                        (softmakelivei)
+  refs_converted      <- grep -Ec 'llmconv1[.][12]$' logllmconv          (llmconvi)
+  usurped             <- grep -Ec 'fixiats20[.][1246]' logiats            (usurpi)
+  deadlink_removed    <- grep -c 'removed dead link' urlchanger          (rdl)
+  deadlink_added      <- grep -Ec 'urlchangerL[.](4|6)[A-Za-z]?$' urlchanger (adli;
+                         no domain grep: urlchangerL rows are domain-limited at log time)
+  metadata_changed    <- grep -Ec 'urlchanger5[.](4|6)$' urlchanger      (metai)
+  templates_converted <- wc -l unwindtl                                  (uwtli)
+
+START DATES (the START table below): before a metric's start date nothing is sent
+for it, even when its log exists - the feature was not logged yet (or, for
+urlchanger/syslog ids before 2024, the id meant something else). Before
+archives_proactive's start, proactive archives were not logged at all.
 
 FILE-PRESENCE = DATA-PRESENCE. A metric is emitted ONLY when its source log
 exists. An absent log means the feature did not exist yet for that (older)
 project -> NO DATA (omit), NOT a zero. A present log with a genuine 0 count IS
-emitted as 0. So pages_edited/archives_added go back ~2015, status_* appear once
-`urlchanger` exists (~2021+), links_moved once `syslog` has 7.1 redirects (softredir
-era, ~Nov-2024+).
+emitted as 0. So pages_edited/archives_added/archives_reactive go back ~2015;
+refs_converted and templates_converted start when their own logs exist; the rest
+start at the later of file presence and their START date.
 
 A project is "finished" exactly when discovered.orig exists: the push script writes
 it only after edits land on enwiki. That same file's mtime is the event date
@@ -37,7 +61,7 @@ it only after edits land on enwiki. That same file's mtime is the event date
 
 Modes:
   --backfill   rollups DEFERRED; afterwards rebuild_rollups.py medic_enwiki (py3.11 job).
-  (default)    live rollups - for the acre cron.
+  (default)    live rollups - for the slater cron.
   --dry-run    compute everything and print a per-year breakdown; POST nothing,
                write no state. Verify before a hot run.
   --since-days N  only look at projects whose discovered.orig changed in the last N
@@ -66,10 +90,13 @@ TOKEN_FILE_DEFAULT = os.path.expanduser("~/.config/tss/token_medic_enwiki")
 STATE_DEFAULT = os.path.expanduser("~/.config/tss/medic_enwiki.state")
 
 METRICS = ("pages_edited", "archives_added", "status_to_live",
-           "status_to_dead", "links_moved")
+           "status_to_dead", "links_moved", "archives_reactive",
+           "archives_proactive", "soft404_resolved", "refs_converted",
+           "deadlink_removed", "made_live", "usurped", "metadata_changed",
+           "templates_converted", "deadlink_added")
 
 # Remote compute. For each project dir holding a discovered.orig (= finished),
-# emit ONE tab line:  project<TAB>date<TAB>pages<TAB>archives<TAB>live<TAB>dead<TAB>moved
+# emit ONE tab line:  project<TAB>date<TAB><one field per METRICS entry, same order>
 # A field is the integer count, or "-" when the source log is ABSENT (no data).
 # $1 (optional) is a find -newermt spec, e.g. "@1700000000", to limit to recent
 # projects; empty = every project. grep -c prints 0 (exit 1) on no match - fine,
@@ -89,33 +116,100 @@ fi
   if [ -e "$dir/discovered.orig" ]; then dt="$dir/discovered.orig"; else dt="$dir/Documentation"; fi
   date=$(date -d @"$(stat -c %%Y "$dt")" +%%F 2>/dev/null)
 
-  arch="-"
+  # archives: added = every row (history stays continuous); split by tag.
+  # newialink row: "article----wurl ---- location ---- tags" -> split on " ---- "
+  # gives 3 fields when tags exist. proactive = 3+ fields and the last holds the
+  # word "proactive". Everything else (untagged/old formats) and all of
+  # newaltarch is reactive.
+  arch="-"; areact="-"; apro="-"
   if [ -e "$dir/newialink" ] || [ -e "$dir/newaltarch" ]; then
-    nia=0; [ -e "$dir/newialink" ]  && nia=$(wc -l < "$dir/newialink")
+    nia=0; pro=0; [ -e "$dir/newialink" ]  && nia=$(wc -l < "$dir/newialink")
+    [ -e "$dir/newialink" ] && pro=$(awk -F' ---- ' 'NF>=3 && $NF ~ /(^| )proactive( |$)/{n++} END{print n+0}' "$dir/newialink")
     naa=0; [ -e "$dir/newaltarch" ] && naa=$(wc -l < "$dir/newaltarch")
-    arch=$((nia + naa))
+    arch=$((nia + naa)); apro=$pro; areact=$((arch - pro))
   fi
 
-  sl="-"; sd="-"
+  # status_to_live excludes the url-status-live rows that a cs12 make-live
+  # writes (urlchanger1.54/1.56) - those are counted in made_live instead.
+  sl="-"; sd="-"; rdl="-"; meta="-"; adl="-"
   if [ -e "$dir/urlchanger" ]; then
-    sl=$(grep -c 'url-status live' "$dir/urlchanger")
+    sl=$(grep 'url-status live' "$dir/urlchanger" | grep -Evc 'urlchanger1[.]5[46]$')
     sd=$(grep -c 'url-status dead' "$dir/urlchanger")
+    rdl=$(grep -c 'removed dead link' "$dir/urlchanger")
+    meta=$(grep -Ec 'urlchanger5[.](4|6)$' "$dir/urlchanger")
+    adl=$(grep -Ec 'urlchangerL[.](4|6)[A-Za-z]?$' "$dir/urlchanger")
   fi
 
-  moved="-"
+  moved="-"; s404="-"; mlive="-"
   if [ -e "$dir/syslog" ]; then
     r=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}A' "$dir/syslog")
     n=$(grep -Ec 'urlchanger7.1.[1-9]{1,2}B' "$dir/syslog")
     i=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}I' "$dir/syslog")
     g=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}H' "$dir/syslog")
     c=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}D' "$dir/syslog")
-    moved=$((r + n + i + g + c))
+    f=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}F' "$dir/syslog")
+    moved=$((r + n + i + g + c + f))
+    s404=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}(T|S)' "$dir/syslog")
+    mlive=$(grep -Ec '(urlchanger5[.]5|urlchanger1[.]5[17]|urlchanger2[.]5|urlchanger3[.]2|urlchanger16[.]1|urlchanger6[.]2)$' "$dir/syslog")
   fi
 
-  printf '%%s\t%%s\t%%s\t%%s\t%%s\t%%s\t%%s\n' "$proj" "$date" "$pages" "$arch" "$sl" "$sd" "$moved"
+  # Old-form moves (before the 7.1 letter codes): "Redirect found: check it out" /
+  # "WM Redirect found..." / "Redirect found del .asp" with id urlchanger7.1[.N[a-z]].
+  # Only for a project with NO urlchanger7.1.N<CAPITAL> row in syslog. Count in
+  # syslog; if that gives 0, count in urlchanger instead - never add the two, both
+  # logs hold the same move. Other 7.1 messages (Redirect to home/soft-404) are not moves.
+  OLDRE=' ---- (WM )?Redirect found[^-]* ---- urlchanger7[.]1([.][0-9]+[a-z]?)?$'
+  if [ -e "$dir/syslog" ] || [ -e "$dir/urlchanger" ]; then
+    newform=0; old=0
+    [ -e "$dir/syslog" ] && newform=$(grep -Ec 'urlchanger7[.]1[.][0-9]+[A-Z]' "$dir/syslog")
+    if [ "$newform" -eq 0 ]; then
+      [ -e "$dir/syslog" ] && old=$(grep -Ec "$OLDRE" "$dir/syslog")
+      [ "$old" -eq 0 ] && [ -e "$dir/urlchanger" ] && old=$(grep -Ec "$OLDRE" "$dir/urlchanger")
+    fi
+    [ "$moved" = "-" ] && moved=0
+    moved=$((moved + old))
+  fi
+
+  llm="-"; [ -e "$dir/logllmconv" ] && llm=$(grep -Ec 'llmconv1[.][12]$' "$dir/logllmconv")
+  usurp="-"; [ -e "$dir/logiats" ] && usurp=$(grep -Ec 'fixiats20[.][1246]' "$dir/logiats")
+  uwtl="-"; [ -e "$dir/unwindtl" ] && uwtl=$(wc -l < "$dir/unwindtl")
+
+  # field order == METRICS order
+  printf '%%s\t%%s' "$proj" "$date"
+  printf '\t%%s' "$pages" "$arch" "$sl" "$sd" "$moved" "$areact" "$apro" \
+    "$s404" "$llm" "$rdl" "$mlive" "$usurp" "$meta" "$uwtl" "$adl"
+  printf '\n'
 done
 ''' % META
 
+
+# START: per-metric date before which the metric is NOT sent (no data -> a gap on
+# the chart); from it on a 0 is a real 0. Set from the first project whose logs hold
+# the feature's own rows (checked 2026-11-25 against all 2,421 finished projects,
+# sampling the matched rows). Metrics not listed rely on file presence alone.
+START = {
+    # pre-2024 matches are module-numbered ids with other meanings (amnestyre2 3.2, chartstats3 5.5, ioe 6.2)
+    "made_live":        "2024-01-01",
+    # first "add url-status live" row (urlchanger1.2b): thecanadianencyclopedia, 2023-06-09
+    "status_to_live":   "2023-06-09",
+    # first "url-status dead" row: adelaide2, 2024-01-13
+    "status_to_dead":   "2024-01-13",
+    # first "removed dead link" row: betalatimes, 2024-04-12
+    "deadlink_removed": "2024-04-12",
+    # first L.4/L.6 row; every sampled match since reads "add {{dead link}}": msnbc, 2019-11-16
+    "deadlink_added":   "2019-11-16",
+    # first 5.4 row; pre-2024 matches are "remove stray domain in work.etc field" (metadata): danish, 2020-05-03
+    "metadata_changed": "2020-05-03",
+    # first finished project (by date) with an old-form move row ("Redirect found ... urlchanger7.1"): msnbc.0051-0150, 2019-11-08
+    "links_moved":      "2019-11-08",
+    # first 7.1 T/S soft-404 row in syslog: espngocom, 2024-07-17
+    "soft404_resolved": "2024-07-17",
+    # first finished projects with proactive rows (thehinducom2 passA/passC); the controller
+    # backfills every finished batch with newialinkbf, so untagged after this = a real 0
+    "archives_proactive": "2026-09-25",
+    # first fixiats20 row in logiats (logiats itself exists from 2017): geoftp, 2020-06-16
+    "usurped":          "2020-06-16",
+}
 
 _SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", HOST]
 
@@ -159,13 +253,15 @@ def stream(since_arg):
     p.stdin.close()
     for line in p.stdout:
         parts = line.rstrip("\n").split("\t")
-        if len(parts) != 7:
+        if len(parts) != 2 + len(METRICS):
             continue
-        proj, date, pages, arch, sl, sd, moved = parts
+        proj, date = parts[0], parts[1]
         if not proj or not date:
             continue
         vals = {}
-        for metric, field in zip(METRICS, (pages, arch, sl, sd, moved)):
+        for metric, field in zip(METRICS, parts[2:]):
+            if date < START.get(metric, ""):
+                continue                      # before the metric's start: no data
             if field != "-" and field != "":
                 try:
                     vals[metric] = int(field)
@@ -218,6 +314,7 @@ def main():
     by_year = defaultdict(Counter)        # year -> metric -> summed value
     yr_projects = defaultdict(set)        # year -> set(project)
     have = Counter()                      # metric -> #projects reporting it
+    yr_have = defaultdict(Counter)        # year -> metric -> #projects reporting it
 
     buf = []            # pending events
     buf_projects = []   # projects contributing to buf (for checkpoint)
@@ -261,6 +358,7 @@ def main():
             for m, v in vals.items():
                 by_year[yr][m] += v
                 have[m] += 1
+                yr_have[yr][m] += 1
         buf.extend(events)
         buf_projects.append(proj)
         if len(buf) >= args.batch_size:
@@ -271,13 +369,14 @@ def main():
     print(f"{mode}: {seen} finished projects seen, {ingested} ingested "
           f"({total_events} events), {skipped} already-done")
     if args.dry_run:
-        print("\n  year   projects   pages_edited  archives_added  to_live  to_dead  links_moved")
-        for yr in sorted(by_year):
-            c = by_year[yr]
-            print(f"  {yr}   {len(yr_projects[yr]):>7}   "
-                  f"{c['pages_edited']:>12,}  {c['archives_added']:>14,}  "
-                  f"{c['status_to_live']:>7,}  {c['status_to_dead']:>7,}  "
-                  f"{c['links_moved']:>11,}")
+        # one row per metric, one column per year (15 metrics don't fit across);
+        # "-" = no project sent the metric that year (no data), 0 = a real zero
+        yrs = sorted(by_year)
+        print("\n  %-20s" % "metric" + "".join(f"{y:>10}" for y in yrs))
+        print("  %-20s" % "projects" + "".join(f"{len(yr_projects[y]):>10,}" for y in yrs))
+        for m in METRICS:
+            print("  %-20s" % m + "".join(
+                f"{by_year[y][m]:>10,}" if yr_have[y][m] else f"{'-':>10}" for y in yrs))
         print("\n  projects reporting each metric (file present):")
         for m in METRICS:
             print(f"    {m:16} {have[m]:>6}")

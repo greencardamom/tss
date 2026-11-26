@@ -98,9 +98,19 @@
       "metrics": [
         "pages_edited",
         "archives_added",
+        "archives_reactive",
+        "archives_proactive",
         "links_moved",
+        "soft404_resolved",
+        "made_live",
         "status_to_live",
-        "status_to_dead"
+        "status_to_dead",
+        "usurped",
+        "deadlink_removed",
+        "deadlink_added",
+        "refs_converted",
+        "metadata_changed",
+        "templates_converted"
       ]
     }
   ],

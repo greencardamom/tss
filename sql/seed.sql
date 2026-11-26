@@ -183,15 +183,21 @@ ON DUPLICATE KEY UPDATE
 --
 --   File-presence = data-presence: a metric is recorded only when its source log
 --   exists; an absent log (older projects predate that feature) is NO DATA, not a
---   zero. So back through time, pages_edited/archives_added reach ~2015, while
---   status_* (urlchanger, ~2021+) and links_moved (syslog 7.1 redirects, softredir
---   era ~Nov-2024+) only appear once those features existed.
+--   zero. So back through time, pages_edited/archives_* reach ~2015, while the
+--   urlchanger metrics (~2021+), the syslog ones (softredir era ~Nov-2024+) and
+--   refs_converted/usurped/templates_converted only appear once their logs exist.
+--
+--   archives_added = archives_reactive + archives_proactive. Proactive (archive
+--   added to a LIVE link) starts 2026-09-25; before it there is no proactive
+--   data (a gap, not 0). Id/text-matched metrics have start dates too (START in
+--   the loader). status_to_live excludes the rows a cs12 make-live writes,
+--   so status_to_live and made_live do not overlap and can be added.
 -- ----------------------------------------------------------------------------
 INSERT INTO source (slug, name, description, ref_url_tpl)
 VALUES (
     'medic_enwiki',
     'WaybackMedic — English Wikipedia',
-    'Per-day counts of WaybackMedic''s dead-link repairs on English Wikipedia (links moved to new URLs, archive URLs added, url-status flips, pages edited); since 2015.',
+    'Per-day counts of WaybackMedic''s link repairs on English Wikipedia (links moved to new URLs, archive URLs added, soft-404s resolved, url-status flips, dead-link tags, pages edited); since 2015.',
     NULL
 )
 ON DUPLICATE KEY UPDATE
@@ -206,7 +212,17 @@ INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, categ
     (@mew, 'archives_added',  'Archive URLs added',         'urls',  'count', 'sum', 'Archive'),
     (@mew, 'status_to_live',  'Switched dead -> live',      'links', 'count', 'sum', 'Status'),
     (@mew, 'status_to_dead',  'Switched live -> dead',      'links', 'count', 'sum', 'Status'),
-    (@mew, 'pages_edited',    'Pages edited',               'pages', 'count', 'sum', 'Pages')
+    (@mew, 'pages_edited',    'Pages edited',               'pages', 'count', 'sum', 'Pages'),
+    (@mew, 'archives_reactive',   'Reactive archives',         'urls',  'count', 'sum', 'Archive'),
+    (@mew, 'archives_proactive',  'Proactive archives',        'urls',  'count', 'sum', 'Archive'),
+    (@mew, 'soft404_resolved',    'Soft-404s resolved',        'links', 'count', 'sum', 'Links'),
+    (@mew, 'made_live',           'Made live',                 'links', 'count', 'sum', 'Status'),
+    (@mew, 'usurped',             'Switched to usurped',       'links', 'count', 'sum', 'Status'),
+    (@mew, 'deadlink_removed',    '{{dead link}} removed',     'links', 'count', 'sum', 'Tags'),
+    (@mew, 'deadlink_added',      '{{dead link}} added',       'links', 'count', 'sum', 'Tags'),
+    (@mew, 'refs_converted',      'References converted',      'refs',  'count', 'sum', 'Citations'),
+    (@mew, 'metadata_changed',    'Citation metadata changed', 'refs',  'count', 'sum', 'Citations'),
+    (@mew, 'templates_converted', 'Templates converted',       'templates', 'count', 'sum', 'Citations')
 ON DUPLICATE KEY UPDATE
     label       = VALUES(label),
     unit        = VALUES(unit),
