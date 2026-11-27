@@ -252,6 +252,16 @@
   // the browser's LOCAL time by default, so west of UTC every point read as the
   // last day of the previous month (October showed as 9-30). Show UTC instead.
   function utcDate(ts) { return uPlot.tzDate(new Date(ts * 1e3), "Etc/UTC"); }
+  // A point is a whole PERIOD (stored at its first day), not a moment: label it as
+  // the period - "Oct 2026", "2026" - so 10-01 is not read as "the value as of
+  // Oct 1". Daily points keep their date. Used for the hover/legend x value.
+  function periodText(ts, grain) {
+    if (ts == null) return "--";
+    var d = new Date(ts * 1e3), loc = TSS.lang || "en";
+    if (grain === "year") return String(d.getUTCFullYear());
+    if (grain === "month") return d.toLocaleString(loc, { month: "short", year: "numeric", timeZone: "UTC" });
+    return d.toISOString().slice(0, 10);
+  }
 
   // --- run -----------------------------------------------------------------
   function run() {
@@ -434,7 +444,7 @@
     if (!lines.length && g.all) lines.push({ label: t("ui.combined"), values: g.all });
 
     var data = [xs].concat(lines.map(function (l) { return l.values; }));
-    var series = [{}].concat(lines.map(function (l, i) {
+    var series = [{ value: function (u, v) { return periodText(v, state.grain); } }].concat(lines.map(function (l, i) {
       return { label: l.label, stroke: PALETTE[i % PALETTE.length], width: 1.6,
                points: { show: true, size: 4 } };
     }));
@@ -631,7 +641,7 @@
       var xs = xk.map(function (k) {
         return Date.parse(k + (monthly ? "-01" : "-01-01") + "T00:00:00Z") / 1000;
       });
-      var data = [xs], series = [{}];
+      var data = [xs], series = [{ value: function (u, v) { return periodText(v, monthly ? "month" : "year"); } }];
       // On a monthly line, a gap INSIDE a series' active span means the tool
       // simply did not run that month, so it plots as 0 and the line stays
       // unbroken. Gaps before it started (or after it stopped) stay null — that
