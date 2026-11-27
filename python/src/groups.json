@@ -102,7 +102,6 @@
         "archives_proactive",
         "links_moved",
         "soft404_resolved",
-        "made_live",
         "status_to_live",
         "status_to_dead",
         "usurped",

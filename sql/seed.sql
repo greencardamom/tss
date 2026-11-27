@@ -190,8 +190,9 @@ ON DUPLICATE KEY UPDATE
 --   archives_added = archives_reactive + archives_proactive. Proactive (archive
 --   added to a LIVE link) starts 2026-09-25; before it there is no proactive
 --   data (a gap, not 0). Id/text-matched metrics have start dates too (START in
---   the loader). status_to_live excludes the rows a cs12 make-live writes,
---   so status_to_live and made_live do not overlap and can be added.
+--   the loader). status_to_live excludes the rows a cs12 make-live writes;
+--   make-live is an intermediary step, not work done, and is not a metric.
+--   (made_live existed briefly on 2026-11-26; its rows were deleted.)
 -- ----------------------------------------------------------------------------
 INSERT INTO source (slug, name, description, ref_url_tpl)
 VALUES (
@@ -216,7 +217,6 @@ INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, categ
     (@mew, 'archives_reactive',   'Reactive archives',         'urls',  'count', 'sum', 'Archive'),
     (@mew, 'archives_proactive',  'Proactive archives',        'urls',  'count', 'sum', 'Archive'),
     (@mew, 'soft404_resolved',    'Soft-404s resolved',        'links', 'count', 'sum', 'Links'),
-    (@mew, 'made_live',           'Made live',                 'links', 'count', 'sum', 'Status'),
     (@mew, 'usurped',             'Switched to usurped',       'links', 'count', 'sum', 'Status'),
     (@mew, 'deadlink_removed',    '{{dead link}} removed',     'links', 'count', 'sum', 'Tags'),
     (@mew, 'deadlink_added',      '{{dead link}} added',       'links', 'count', 'sum', 'Tags'),

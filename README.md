@@ -14,7 +14,7 @@ Sources are named after the API/service the data comes from:
 - **booksup** — daily BooksUp usage counts, pulled daily from BooksUp's statistics API (2026→).
 - **medic_iabotdb** — WaybackMedic's edits to the IABot DB (archive add/modify/
   delete + URL status changes) from medic's logs (2017→).
-- **medic_enwiki** — WaybackMedic's link repairs on English Wikipedia (16 metrics, incl.
+- **medic_enwiki** — WaybackMedic's link repairs on English Wikipedia (15 metrics, incl.
   reactive vs proactive archives), computed from medic's logs (2015→).
 - **arcstat** — archive-URL *inventory* per-site (~66 largest) monthly (2019→).
 - **numberofurl** — archive-URL *inventory* across **all** Wikimedia wikis (~850) monthly since (Oct 2025→).
@@ -395,25 +395,24 @@ A *different* slice of medic from `medic_iabotdb`: the dead-link **repairs on En
 Wikipedia**, one `rabbit:/home/greenc/sharedNFS/medic/meta/<name>.<range>/` directory
 per project. A project is "finished" exactly when `discovered.orig` exists (the push
 script writes it only after edits land on enwiki); that file's mtime (falling back to
-`Documentation`'s) is the event date. Sixteen global metrics are computed straight from
+`Documentation`'s) is the event date. Fifteen global metrics are computed straight from
 each project's logs — the SAME numbers the per-project tcsh `stats` script reports:
 
 | metric | from | available since |
 |---|---|---|
 | `pages_edited` | `wc -l discovered.orig` | ~2015 |
 | `archives_added` | `wc -l newialink` + `wc -l newaltarch` (all rows, so history stays continuous) | ~2015 |
-| `archives_proactive` | `newialink` rows that, split on `" ---- "` (with the spaces), have 3+ fields and whose last field holds the tag `proactive` — archive added to a **live** link | tagged since 2026-11 |
+| `archives_proactive` | `newialink` rows that, split on `" ---- "` (with the spaces), have 3+ fields and whose last field holds the tag `proactive` — archive added to a **live** link | 2026-09-25 |
 | `archives_reactive` | `archives_added` − `archives_proactive`: untagged/old-format rows + all `newaltarch` — archive **repairs a dead link** | ~2015 |
-| `status_to_live` | `grep 'url-status live' urlchanger`, **minus** rows ending `urlchanger1.54`/`1.56` (written by a cs12 make-live, which `made_live` already counts) | ~2021 |
-| `status_to_dead` | `grep -c 'url-status dead' urlchanger` | ~2021 |
-| `deadlink_removed` | `grep -c 'removed dead link' urlchanger` | ~2021 |
-| `deadlink_added` | `grep -Ec 'urlchangerL[.](4\|6)[A-Za-z]?$' urlchanger` (no domain grep: urlchangerL rows are domain-limited at log time) | ~2021 |
-| `metadata_changed` | `grep -Ec 'urlchanger5[.](4\|6)$' urlchanger` | ~2021 |
-| `links_moved` | sum of 6 `syslog` `urlchanger7.1.NN{A,B,I,H,D,F}` counts (= `stats`'s `convi`; `normal` is `[1-9]B`, excluding `7.1.0B`) | softredir era, ~Nov 2024 |
-| `soft404_resolved` | `grep -Ec 'urlchanger7.1.[0-9]{1,2}(T\|S)' syslog` | `syslog` present |
-| `made_live` | `syslog` lines ending `urlchanger5.5`/`1.51`/`1.57`/`2.5`/`3.2`/`16.1`/`6.2` | `syslog` present |
+| `status_to_live` | `grep 'url-status live' urlchanger`, **minus** rows ending `urlchanger1.54`/`1.56` (written by a cs12 make-live — an intermediary step, not work done, so not counted anywhere) | 2023-06-09 |
+| `status_to_dead` | `grep -c 'url-status dead' urlchanger` | 2024-01-13 |
+| `deadlink_removed` | `grep -c 'removed dead link' urlchanger` | 2024-04-12 |
+| `deadlink_added` | `grep -Ec 'urlchangerL[.](4\|6)[A-Za-z]?$' urlchanger` (no domain grep: urlchangerL rows are domain-limited at log time) | 2019-11-16 |
+| `metadata_changed` | `grep -Ec 'urlchanger5[.](4\|6)$' urlchanger` | 2020-05-03 |
+| `links_moved` | sum of 6 `syslog` `urlchanger7.1.NN{A,B,I,H,D,F}` counts (= `stats`'s `convi`; `normal` is `[1-9]B`, excluding `7.1.0B`), plus — only in projects with no `7.1.N<CAPITAL>` row — old-form `Redirect found … urlchanger7.1[.N[a-z]]` moves, counted in `syslog`, else `urlchanger`, never both | 2019-11-08 |
+| `soft404_resolved` | `grep -Ec 'urlchanger7.1.[0-9]{1,2}(T\|S)' syslog` | 2024-07-17 |
 | `refs_converted` | `grep -Ec 'llmconv1[.][12]$' logllmconv` | `logllmconv` present |
-| `usurped` | `grep -Ec 'fixiats20[.][1246]' logiats` | `logiats` present |
+| `usurped` | `grep -Ec 'fixiats20[.][1246]' logiats` | 2020-06-16 |
 | `templates_converted` | `wc -l unwindtl` | `unwindtl` present |
 | `access_status_added` | `grep -Ec 'urlchangerSUB[.](4\|6)$' urlchanger` — `url-access=subscription/limited` or `{{subscription}}`/`{{limited access}}` added. Match the id only: the text `url-access` also appears in `urlchanger0.0` dumps and `5.7` enrich rows. Not SUB.5/5b, not logiats `iatsWebarchiveAccess` | 2026-09-25 |
 
@@ -427,14 +426,15 @@ project is a real 0: only a module rebuilt from the SKELETON after 2026-11-25 wr
 proactive rows itself, and the controller backfills every finished batch with
 `newialinkbf`. Before the start, `archives_reactive` equals `archives_added`. The
 Analysis "dead links fixed" question uses `archives_reactive + links_moved`.
-`status_to_live` and `made_live` do not overlap and can be added.
+Make-live (a cs12 step that undoes a medic error or prepares a cite for later work) is
+not work done and is not counted; `status_to_live` excludes the url-status rows it writes.
 
 **Start dates:** each id- or text-matched metric has a start date in the loader's
 `START` table, with a one-line reason for each. Before it nothing is sent (a gap on the
 chart); from it on, a 0 is a real 0. They are the first project whose logs hold the
 feature's own rows. Before 2024, urlchanger/syslog ids were numbered per module and
-could mean something else (e.g. 5.5 = "change ref name" in chartstats3), which is why
-`made_live` starts 2024-01-01.
+could mean something else (e.g. 5.5 = "change ref name" in chartstats3), so each start
+was checked against sampled rows.
 
 **File-presence = data-presence:** a metric is emitted only when its source log
 exists; an absent log (an older project predating that feature) is NO DATA, not a

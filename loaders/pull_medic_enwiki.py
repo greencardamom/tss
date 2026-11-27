@@ -24,8 +24,9 @@ Metric  <- file / computation (matches the `stats` script's variables):
   archives_reactive   <- archives_added - archives_proactive (untagged/old rows +
                          all newaltarch: archive repairs a dead link)
   status_to_live      <- grep 'url-status live' urlchanger, MINUS rows ending
-                         urlchanger1.54/1.56 (written by a cs12 make-live, which is
-                         counted in made_live) -> the two add without overlap
+                         urlchanger1.54/1.56 (written by a cs12 make-live, an
+                         intermediary step - undoing a medic error or preparing a
+                         cite for later work - not counted as work done anywhere)
   status_to_dead      <- grep -c 'url-status dead' urlchanger           (urlsdi)
   links_moved         <- sum of 6 syslog 'urlchanger7.1.NN{A,B,I,H,D,F}' counts
                          (convi); normal-redirects is [1-9]B not [0-9]B ("Don't
@@ -33,8 +34,6 @@ Metric  <- file / computation (matches the `stats` script's variables):
                          with no 7.1.N<CAPITAL> row, old-form "Redirect found"
                          moves (syslog, else urlchanger; never both)
   soft404_resolved    <- grep -Ec 'urlchanger7.1.[0-9]{1,2}(T|S)' syslog (soft404i)
-  made_live           <- syslog lines ending urlchanger5.5/1.51/1.57/2.5/3.2/16.1/6.2
-                                                                        (softmakelivei)
   refs_converted      <- grep -Ec 'llmconv1[.][12]$' logllmconv          (llmconvi)
   usurped             <- grep -Ec 'fixiats20[.][1246]' logiats            (usurpi)
   deadlink_removed    <- grep -c 'removed dead link' urlchanger          (rdl)
@@ -95,7 +94,7 @@ STATE_DEFAULT = os.path.expanduser("~/.config/tss/medic_enwiki.state")
 METRICS = ("pages_edited", "archives_added", "status_to_live",
            "status_to_dead", "links_moved", "archives_reactive",
            "archives_proactive", "soft404_resolved", "refs_converted",
-           "deadlink_removed", "made_live", "usurped", "metadata_changed",
+           "deadlink_removed", "usurped", "metadata_changed",
            "templates_converted", "deadlink_added", "access_status_added")
 
 # Remote compute. For each project dir holding a discovered.orig (= finished),
@@ -133,7 +132,7 @@ fi
   fi
 
   # status_to_live excludes the url-status-live rows that a cs12 make-live
-  # writes (urlchanger1.54/1.56) - those are counted in made_live instead.
+  # writes (urlchanger1.54/1.56) - make-live is an intermediary step, not work done.
   sl="-"; sd="-"; rdl="-"; meta="-"; adl="-"; sub="-"
   if [ -e "$dir/urlchanger" ]; then
     sl=$(grep 'url-status live' "$dir/urlchanger" | grep -Evc 'urlchanger1[.]5[46]$')
@@ -145,7 +144,7 @@ fi
     sub=$(grep -Ec 'urlchangerSUB[.](4|6)$' "$dir/urlchanger")
   fi
 
-  moved="-"; s404="-"; mlive="-"
+  moved="-"; s404="-"
   if [ -e "$dir/syslog" ]; then
     r=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}A' "$dir/syslog")
     n=$(grep -Ec 'urlchanger7.1.[1-9]{1,2}B' "$dir/syslog")
@@ -155,7 +154,6 @@ fi
     f=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}F' "$dir/syslog")
     moved=$((r + n + i + g + c + f))
     s404=$(grep -Ec 'urlchanger7.1.[0-9]{1,2}(T|S)' "$dir/syslog")
-    mlive=$(grep -Ec '(urlchanger5[.]5|urlchanger1[.]5[17]|urlchanger2[.]5|urlchanger3[.]2|urlchanger16[.]1|urlchanger6[.]2)$' "$dir/syslog")
   fi
 
   # Old-form moves (before the 7.1 letter codes): "Redirect found: check it out" /
@@ -182,7 +180,7 @@ fi
   # field order == METRICS order
   printf '%%s\t%%s' "$proj" "$date"
   printf '\t%%s' "$pages" "$arch" "$sl" "$sd" "$moved" "$areact" "$apro" \
-    "$s404" "$llm" "$rdl" "$mlive" "$usurp" "$meta" "$uwtl" "$adl" "$sub"
+    "$s404" "$llm" "$rdl" "$usurp" "$meta" "$uwtl" "$adl" "$sub"
   printf '\n'
 done
 ''' % META
@@ -193,8 +191,6 @@ done
 # the feature's own rows (checked 2026-11-25 against all 2,421 finished projects,
 # sampling the matched rows). Metrics not listed rely on file presence alone.
 START = {
-    # pre-2024 matches are module-numbered ids with other meanings (amnestyre2 3.2, chartstats3 5.5, ioe 6.2)
-    "made_live":        "2024-01-01",
     # first "add url-status live" row (urlchanger1.2b): thecanadianencyclopedia, 2023-06-09
     "status_to_live":   "2023-06-09",
     # first "url-status dead" row: adelaide2, 2024-01-13

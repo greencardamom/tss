@@ -77,7 +77,6 @@
   "desc.medic_enwiki.archives_reactive": "Archive URLs added to repair a dead link. Archives added to live links are counted under Proactive archives.",
   "desc.medic_enwiki.archives_proactive": "Archive URLs added to links that were still live, so a snapshot exists for when they die. Logged since September 2026; no data before that.",
   "desc.medic_enwiki.soft404_resolved": "Soft-404s resolved (links that answer 200 but are really dead).",
-  "desc.medic_enwiki.made_live": "URLs made live. Does not overlap Switched dead -> live; the two can be added.",
   "desc.medic_enwiki.refs_converted": "Structured references converted.",
   "desc.medic_enwiki.usurped": "Citations switched to url-status=usurped.",
   "desc.medic_enwiki.deadlink_removed": "{{dead link}} tags removed.",
