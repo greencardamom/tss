@@ -248,6 +248,11 @@
     return { from: null, to: null, label: t("ui.all_time", "All history") };  // year
   }
 
+  // Buckets are UTC dates (a month is stored as YYYY-MM-01T00:00Z). uPlot shows
+  // the browser's LOCAL time by default, so west of UTC every point read as the
+  // last day of the previous month (October showed as 9-30). Show UTC instead.
+  function utcDate(ts) { return uPlot.tzDate(new Date(ts * 1e3), "Etc/UTC"); }
+
   // --- run -----------------------------------------------------------------
   function run() {
     writeUrl();
@@ -434,7 +439,7 @@
                points: { show: true, size: 4 } };
     }));
     var w = host.clientWidth || (host.parentNode && host.parentNode.clientWidth) || 800;
-    var u = new uPlot({ width: w, height: 340, scales: { x: { time: true } },
+    var u = new uPlot({ width: w, height: 340, scales: { x: { time: true } }, tzDate: utcDate,
                        series: series,
                        axes: [ {}, { size: 60,   // wider gutter; abbreviated ticks (no clipping)
                                      values: function (u, vals) { return vals.map(abbrev); } } ] },
@@ -652,7 +657,7 @@
                       points: pt });
       }
       var w = host.clientWidth || result.clientWidth || 800;
-      var u = new uPlot({ width: w, height: 300, scales: { x: { time: true } }, series: series,
+      var u = new uPlot({ width: w, height: 300, scales: { x: { time: true } }, tzDate: utcDate, series: series,
                           axes: [ {}, { size: 60, values: function (u, v) {
                             return v.map(pct ? function (x) { return x + "%"; } : abbrev); } } ] },
                         data, host);
