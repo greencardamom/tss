@@ -26,6 +26,14 @@
             [
               "medic_enwiki",
               "links_moved"
+            ],
+            [
+              "medic_enwiki",
+              "status_to_dead"
+            ],
+            [
+              "medic_enwiki",
+              "usurped"
             ]
           ]
         }

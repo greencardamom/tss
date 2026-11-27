@@ -425,7 +425,8 @@ closed projects were backfilled on 2026-11-25), so `archives_proactive` starts
 project is a real 0: only a module rebuilt from the SKELETON after 2026-11-25 writes
 proactive rows itself, and the controller backfills every finished batch with
 `newialinkbf`. Before the start, `archives_reactive` equals `archives_added`. The
-Analysis "dead links fixed" question uses `archives_reactive + links_moved`.
+Analysis "dead links fixed" question uses `archives_reactive + links_moved +
+status_to_dead + usurped`.
 Make-live (a cs12 step that undoes a medic error or prepares a cite for later work) is
 not work done and is not counted; `status_to_live` excludes the url-status rows it writes.
 
