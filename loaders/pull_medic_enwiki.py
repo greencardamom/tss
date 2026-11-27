@@ -42,6 +42,9 @@ Metric  <- file / computation (matches the `stats` script's variables):
                          no domain grep: urlchangerL rows are domain-limited at log time)
   metadata_changed    <- grep -Ec 'urlchanger5[.](4|6)$' urlchanger      (metai)
   templates_converted <- wc -l unwindtl                                  (uwtli)
+  access_status_added <- grep -Ec 'urlchangerSUB[.](4|6)$' urlchanger (url-access=
+                         subscription/limited or {{subscription}}/{{limited access}}
+                         added; id only - not SUB.5/5b, not logiats iatsWebarchiveAccess)
 
 START DATES (the START table below): before a metric's start date nothing is sent
 for it, even when its log exists - the feature was not logged yet (or, for
@@ -93,7 +96,7 @@ METRICS = ("pages_edited", "archives_added", "status_to_live",
            "status_to_dead", "links_moved", "archives_reactive",
            "archives_proactive", "soft404_resolved", "refs_converted",
            "deadlink_removed", "made_live", "usurped", "metadata_changed",
-           "templates_converted", "deadlink_added")
+           "templates_converted", "deadlink_added", "access_status_added")
 
 # Remote compute. For each project dir holding a discovered.orig (= finished),
 # emit ONE tab line:  project<TAB>date<TAB><one field per METRICS entry, same order>
@@ -131,13 +134,15 @@ fi
 
   # status_to_live excludes the url-status-live rows that a cs12 make-live
   # writes (urlchanger1.54/1.56) - those are counted in made_live instead.
-  sl="-"; sd="-"; rdl="-"; meta="-"; adl="-"
+  sl="-"; sd="-"; rdl="-"; meta="-"; adl="-"; sub="-"
   if [ -e "$dir/urlchanger" ]; then
     sl=$(grep 'url-status live' "$dir/urlchanger" | grep -Evc 'urlchanger1[.]5[46]$')
     sd=$(grep -c 'url-status dead' "$dir/urlchanger")
     rdl=$(grep -c 'removed dead link' "$dir/urlchanger")
     meta=$(grep -Ec 'urlchanger5[.](4|6)$' "$dir/urlchanger")
     adl=$(grep -Ec 'urlchangerL[.](4|6)[A-Za-z]?$' "$dir/urlchanger")
+    # id only: the text "url-access" also appears in urlchanger0.0 dumps and 5.7 enrich rows
+    sub=$(grep -Ec 'urlchangerSUB[.](4|6)$' "$dir/urlchanger")
   fi
 
   moved="-"; s404="-"; mlive="-"
@@ -177,7 +182,7 @@ fi
   # field order == METRICS order
   printf '%%s\t%%s' "$proj" "$date"
   printf '\t%%s' "$pages" "$arch" "$sl" "$sd" "$moved" "$areact" "$apro" \
-    "$s404" "$llm" "$rdl" "$mlive" "$usurp" "$meta" "$uwtl" "$adl"
+    "$s404" "$llm" "$rdl" "$mlive" "$usurp" "$meta" "$uwtl" "$adl" "$sub"
   printf '\n'
 done
 ''' % META
@@ -207,6 +212,8 @@ START = {
     # first finished projects with proactive rows (thehinducom2 passA/passC); the controller
     # backfills every finished batch with newialinkbf, so untagged after this = a real 0
     "archives_proactive": "2026-09-25",
+    # first project with urlchangerSUB.4/.6 ids (url-access / {{subscription}} added)
+    "access_status_added": "2026-09-25",
     # first fixiats20 row in logiats (logiats itself exists from 2017): geoftp, 2020-06-16
     "usurped":          "2020-06-16",
 }

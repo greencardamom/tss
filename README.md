@@ -14,7 +14,7 @@ Sources are named after the API/service the data comes from:
 - **booksup** — daily BooksUp usage counts, pulled daily from BooksUp's statistics API (2026→).
 - **medic_iabotdb** — WaybackMedic's edits to the IABot DB (archive add/modify/
   delete + URL status changes) from medic's logs (2017→).
-- **medic_enwiki** — WaybackMedic's link repairs on English Wikipedia (15 metrics, incl.
+- **medic_enwiki** — WaybackMedic's link repairs on English Wikipedia (16 metrics, incl.
   reactive vs proactive archives), computed from medic's logs (2015→).
 - **arcstat** — archive-URL *inventory* per-site (~66 largest) monthly (2019→).
 - **numberofurl** — archive-URL *inventory* across **all** Wikimedia wikis (~850) monthly since (Oct 2025→).
@@ -395,7 +395,7 @@ A *different* slice of medic from `medic_iabotdb`: the dead-link **repairs on En
 Wikipedia**, one `rabbit:/home/greenc/sharedNFS/medic/meta/<name>.<range>/` directory
 per project. A project is "finished" exactly when `discovered.orig` exists (the push
 script writes it only after edits land on enwiki); that file's mtime (falling back to
-`Documentation`'s) is the event date. Fifteen global metrics are computed straight from
+`Documentation`'s) is the event date. Sixteen global metrics are computed straight from
 each project's logs — the SAME numbers the per-project tcsh `stats` script reports:
 
 | metric | from | available since |
@@ -415,6 +415,7 @@ each project's logs — the SAME numbers the per-project tcsh `stats` script rep
 | `refs_converted` | `grep -Ec 'llmconv1[.][12]$' logllmconv` | `logllmconv` present |
 | `usurped` | `grep -Ec 'fixiats20[.][1246]' logiats` | `logiats` present |
 | `templates_converted` | `wc -l unwindtl` | `unwindtl` present |
+| `access_status_added` | `grep -Ec 'urlchangerSUB[.](4\|6)$' urlchanger` — `url-access=subscription/limited` or `{{subscription}}`/`{{limited access}}` added. Match the id only: the text `url-access` also appears in `urlchanger0.0` dumps and `5.7` enrich rows. Not SUB.5/5b, not logiats `iatsWebarchiveAccess` | 2026-09-25 |
 
 **Reactive vs proactive** (the iabotapi terms). Each `newialink` row is
 `article----wurl ---- location ---- tags`; `tags` is space-separated and `reactive` or

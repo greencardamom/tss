@@ -110,7 +110,8 @@
         "deadlink_added",
         "refs_converted",
         "metadata_changed",
-        "templates_converted"
+        "templates_converted",
+        "access_status_added"
       ]
     }
   ],

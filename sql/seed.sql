@@ -222,7 +222,8 @@ INSERT INTO metric (source_id, slug, label, unit, value_type, default_agg, categ
     (@mew, 'deadlink_added',      '{{dead link}} added',       'links', 'count', 'sum', 'Tags'),
     (@mew, 'refs_converted',      'References converted',      'refs',  'count', 'sum', 'Citations'),
     (@mew, 'metadata_changed',    'Citation metadata changed', 'refs',  'count', 'sum', 'Citations'),
-    (@mew, 'templates_converted', 'Templates converted',       'templates', 'count', 'sum', 'Citations')
+    (@mew, 'templates_converted', 'Templates converted',       'templates', 'count', 'sum', 'Citations'),
+    (@mew, 'access_status_added', 'Access status added',       'refs',  'count', 'sum', 'Citations')
 ON DUPLICATE KEY UPDATE
     label       = VALUES(label),
     unit        = VALUES(unit),
