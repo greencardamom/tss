@@ -1,40 +1,58 @@
 {
-  "_doc": "Analysis house: curated cross-dataset questions. Each question has 'series' shown SIDE-BY-SIDE (never silently summed). A flow series' value is the sum of its 'parts' ([source, metric]). A ratio series (op:'ratio') is (sum(num) + num_const) / sum(den) * (scale|100) per year; set the question's 'unit':'percent' so the card renders levels (Latest % + Count) instead of a meaningless all-time sum. A delta series (op:'delta', 'parts') is the year-over-year change of a gauge (this year's summed level minus the prior data-year's). Set 'combined':true to add an 'All combined' row summing the plain flow series (ratio/delta series are excluded, and percent questions never get one) — only turn it on where the series are genuinely additive, and say so in the note. Answered client-side from /series (_all, yearly). q/note are i18n keys.",
+  "_doc": "Analysis house: curated cross-dataset questions. Each question has 'series' shown SIDE-BY-SIDE (never silently summed). A flow series' value is the sum of its 'parts' ([source, metric]). A ratio series (op:'ratio') is (sum(num) + num_const) / sum(den) * (scale|100) per year; set the question's 'unit':'percent' so the card renders levels (Latest % + Count) instead of a meaningless all-time sum. A delta series (op:'delta', 'parts') is the year-over-year change of a gauge (this year's summed level minus the prior data-year's). Set 'combined':true to add an 'All combined' row summing the plain flow series (ratio/delta series are excluded, and percent questions never get one) — only turn it on where the series are genuinely additive, and say so in the note. Answered client-side from /series (_all, yearly). q/note are i18n keys. A question may instead hold 'sections' (each {id, title, note, series, combined?}): one heading 'q', then one card (table + graph) per section, in order; a section's series are never summed with another section's.",
   "questions": [
     {
       "id": "deadlinks_fixed",
       "q": "analysis.deadlinks_fixed.q",
-      "note": "analysis.deadlinks_fixed.note",
-      "combined": true,
-      "series": [
+      "sections": [
         {
-          "label": "InternetArchiveBot",
-          "parts": [
-            [
-              "iabotapi",
-              "dead_links"
-            ]
+          "id": "deadlinks_fixed",
+          "title": "analysis.deadlinks_fixed.dead.title",
+          "note": "analysis.deadlinks_fixed.note",
+          "combined": true,
+          "series": [
+            {
+              "label": "InternetArchiveBot",
+              "parts": [
+                [
+                  "iabotapi",
+                  "dead_links"
+                ]
+              ]
+            },
+            {
+              "label": "WaybackMedic",
+              "parts": [
+                [
+                  "medic_enwiki",
+                  "archives_reactive"
+                ],
+                [
+                  "medic_enwiki",
+                  "status_to_dead"
+                ],
+                [
+                  "medic_enwiki",
+                  "usurped"
+                ]
+              ]
+            }
           ]
         },
         {
-          "label": "WaybackMedic",
-          "parts": [
-            [
-              "medic_enwiki",
-              "archives_reactive"
-            ],
-            [
-              "medic_enwiki",
-              "links_moved"
-            ],
-            [
-              "medic_enwiki",
-              "status_to_dead"
-            ],
-            [
-              "medic_enwiki",
-              "usurped"
-            ]
+          "id": "links_updated",
+          "title": "analysis.deadlinks_fixed.moved.title",
+          "note": "analysis.deadlinks_fixed.moved.note",
+          "series": [
+            {
+              "label": "WaybackMedic",
+              "parts": [
+                [
+                  "medic_enwiki",
+                  "links_moved"
+                ]
+              ]
+            }
           ]
         }
       ]

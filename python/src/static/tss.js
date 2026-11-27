@@ -483,8 +483,24 @@
   }
 
   // --- Analysis: a curated question, its series shown side-by-side -----------
-  function renderAnalysis(result, q, status) {
+  function renderAnalysis(result, q, status, sub) {
     if (!q) { status.textContent = ""; return; }
+    // A question with "sections": one heading, then one card (table + graph) per
+    // section, in order. Each section gets its own host div up front, so the
+    // cards keep their order whichever fetch finishes first.
+    if (q.sections) {
+      var head = el("div", { "class": "block" });
+      head.appendChild(el("h2", {}, el("span", { text: t(q.q, q.id) })));
+      var qnote = t(q.note || "", "");
+      if (qnote) head.appendChild(el("div", { "class": "caption", html: qnote }));
+      result.appendChild(head);
+      q.sections.forEach(function (sec) {
+        var shost = el("div", {});
+        result.appendChild(shost);
+        renderAnalysis(shost, sec, status, true);
+      });
+      return;
+    }
     // MONTHLY grain so the chart gets 12 points a year instead of 1 and the
     // current year is visible while it happens -- but only where that is also
     // CORRECT. A question whose series are all plain flows (work done per period)
@@ -579,7 +595,7 @@
       }
 
       var block = el("div", { "class": "block" });
-      block.appendChild(el("h2", {}, el("span", { text: t(q.q, q.id) })));
+      block.appendChild(el(sub ? "h3" : "h2", {}, el("span", { text: t(sub ? q.title : q.q, q.id) })));
       var note = t(q.note, "");
       if (note) block.appendChild(el("div", { "class": "caption", html: note }));
 
