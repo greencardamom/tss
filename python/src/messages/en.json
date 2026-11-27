@@ -83,7 +83,7 @@
   "desc.medic_enwiki.deadlink_removed": "{{dead link}} tags removed.",
   "desc.medic_enwiki.deadlink_added": "{{dead link}} tags added.",
   "desc.medic_enwiki.metadata_changed": "Citation metadata changed.",
-  "desc.medic_enwiki.templates_converted": "Templates converted.",
+  "desc.medic_enwiki.templates_converted": "Deprecated custom templates, e.g. {{ASN|BJA}}, converted to {{cite web}} with an archive URL.",
   "desc.medic_enwiki.access_status_added": "Citations marked as paywalled (url-access subscription or limited) so readers know before they click.",
   "desc.medic_iabotdb.archive_add": "Archive URLs added to records that previously had no archive URLs.",
   "desc.medic_iabotdb.archive_modify": "Existing archive URLs replaced with a different snapshot date.",
