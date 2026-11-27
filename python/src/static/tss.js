@@ -484,7 +484,7 @@
 
   // --- Analysis: a curated question, its series shown side-by-side -----------
   function renderAnalysis(result, q, status, sub) {
-    if (!q) { status.textContent = ""; return; }
+    if (!q) { status.textContent = ""; return Promise.resolve({}); }
     // A question with "sections": one heading, then one card (table + graph) per
     // section, in order. Each section gets its own host div up front, so the
     // cards keep their order whichever fetch finishes first.
@@ -494,12 +494,48 @@
       var qnote = t(q.note || "", "");
       if (qnote) head.appendChild(el("div", { "class": "caption", html: qnote }));
       result.appendChild(head);
-      q.sections.forEach(function (sec) {
+      // Optional summary box ("summary": {title, rows: [{label, section}]}): one row
+      // per named section = that section's own total (its All combined row, or its
+      // single series), then All combined = the rows added up. Same markup and
+      // number formatting as the section boxes; "This year" is the same calendar
+      // year (current part-month included).
+      var sumHost = q.summary ? el("div", { "class": "tablewrap" }) : null;
+      if (sumHost) head.appendChild(sumHost);
+      var totals = {};
+      var pending = q.sections.map(function (sec) {
         var shost = el("div", {});
         result.appendChild(shost);
-        renderAnalysis(shost, sec, status, true);
+        return renderAnalysis(shost, sec, status, true)
+          .then(function (tot) { totals[sec.id] = tot; });
       });
-      return;
+      if (sumHost) Promise.all(pending).then(function () {
+        var cur = String(new Date().getUTCFullYear());
+        var table = el("table", { "class": "grid" });
+        var hr = el("tr");
+        hr.appendChild(el("th", { "class": "site", text: t(q.summary.title, "") }));
+        hr.appendChild(el("th", { "class": "num", text: t("ui.this_year") + " (" + cur + ")" }));
+        hr.appendChild(el("th", { "class": "num total", text: t("ui.alltime") }));
+        table.appendChild(el("thead", {}, hr));
+        var tb = el("tbody"), sc = 0, sa = 0, anyc = false, anya = false;
+        q.summary.rows.forEach(function (r) {
+          var tot = totals[r.section] || {};
+          var tr = el("tr");
+          tr.appendChild(el("th", { "class": "site", text: t(r.label, r.section) }));
+          tr.appendChild(cell(tot.cur != null ? tot.cur : null));
+          tr.appendChild(el("td", { "class": "num total" }, fmt(tot.all != null ? tot.all : null)));
+          tb.appendChild(tr);
+          if (tot.cur != null) { sc += tot.cur; anyc = true; }
+          if (tot.all != null) { sa += tot.all; anya = true; }
+        });
+        var gtr = el("tr", { "class": "grand" });
+        gtr.appendChild(el("th", { "class": "site", text: t("ui.combined") }));
+        gtr.appendChild(cell(anyc ? sc : null));
+        gtr.appendChild(el("td", { "class": "num total" }, fmt(anya ? sa : null)));
+        tb.appendChild(gtr);
+        table.appendChild(tb);
+        sumHost.appendChild(table);
+      });
+      return Promise.all(pending);
     }
     // MONTHLY grain so the chart gets 12 points a year instead of 1 and the
     // current year is visible while it happens -- but only where that is also
@@ -529,7 +565,7 @@
         (s.parts || []).forEach(function (p) { fetchPart(p, s.label, "sum"); });
       }
     });
-    Promise.all(jobs).then(function (ds) {
+    return Promise.all(jobs).then(function (ds) {
       status.textContent = "";
       var num = {}, den = {}, sum = {}, keyset = {};
       q.series.forEach(function (s) { num[s.label] = {}; den[s.label] = {}; sum[s.label] = {}; });
@@ -691,7 +727,19 @@
         u.setSize({ width: host.clientWidth || w, height: 300 });
       });
       result.appendChild(block);
-    }).catch(function (e) { status.textContent = "" + e; });
+      // This card's totals, for a question-level summary box: its All combined
+      // row if it has one, else its plain flow series added up.
+      var tsum = comb;
+      if (!tsum) {
+        tsum = {};
+        flows.forEach(function (s) {
+          for (var k in per[s.label]) tsum[k] = (tsum[k] || 0) + per[s.label][k];
+        });
+      }
+      var tby = byYear(tsum), tall = 0, tany = false;
+      for (var ty in tby) { tall += tby[ty]; tany = true; }
+      return { cur: tby[cur] != null ? tby[cur] : null, all: tany ? tall : null };
+    }).catch(function (e) { status.textContent = "" + e; return {}; });
   }
 
   function init() {
